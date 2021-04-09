@@ -54,6 +54,17 @@ namespace RatchetEdit
         {
             mobNames = GetModelNames("/ModelLists/ModelListRC1.txt");
             tieNames = GetModelNames("/ModelLists/TieModelsRC1.txt");
+            
+            Dictionary<int, string> mobNamesRC2 = GetModelNames("/ModelLists/ModelListRC2.txt");
+
+            foreach (KeyValuePair<int,string> entry in mobNamesRC2)
+            {
+                if (!mobNames.ContainsKey(entry.Key))
+                {
+                    mobNames.Add(entry.Key, entry.Value);
+                }
+            }
+
             objectTree.Init(mobNames, tieNames);
             glControl.SelectTool(glControl.translateTool);
         }

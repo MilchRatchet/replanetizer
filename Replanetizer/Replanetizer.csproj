@@ -55,7 +55,7 @@
     <Compile Update="CustomControls\CustomGLControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Update="Forms\LevelExportWindow.cs" >
+    <Compile Update="Forms\LevelExportWindow.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Update="Forms\AboutBox1.cs">
@@ -182,12 +182,15 @@
     <None Include="Shaders\vs.glsl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="ModelLists\ModelListRC1.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="ModelLists\TieModelsRC1.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <Content Include="ModelLists\ModelListRC1.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="ModelLists\ModelListRC2.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="ModelLists\TieModelsRC1.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\add_button.png" />
@@ -212,6 +215,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="CustomGLControl.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="ModelLists\ModelListRC2.txt" />
   </ItemGroup>
 </Project>
 
