@@ -419,13 +419,27 @@ namespace LibReplanetizer.Parsers
         public List<byte[]> GetPvars(List<Moby> mobs)
         {
             int pvarCount = 0;
+            List<List<Moby>> pvarSortedMobies = new List<List<Moby>>();
+
             foreach (Moby mob in mobs)
             {
                 if (mob.pvarIndex > pvarCount)
                 {
+                    for (int i = pvarCount; i < mob.pvarIndex; i++)
+                    {
+                        pvarSortedMobies.Add(new List<Moby>());
+                    }
+
                     pvarCount = mob.pvarIndex;
                 }
+
+                if (mob.pvarIndex >= 0)
+                {
+                    pvarSortedMobies[mob.pvarIndex - 1].Add(mob);
+                }   
             }
+
+            pvarSortedMobies.Add(new List<Moby>());
 
             pvarCount++;
 
@@ -445,6 +459,10 @@ namespace LibReplanetizer.Parsers
                 uint mobpVarsCount = ReadUint(pVarHeadBlock, (i * 8) + 0x04);
                 byte[] mobpVars = GetBytes(pVarBlock, (int)mobpVarsStart, (int)mobpVarsCount);
                 pVars.Add(mobpVars);
+                foreach (Moby mob in pvarSortedMobies[i])
+                {
+                    mob.pVars = mobpVars;
+                }
             }
 
             return pVars;
