@@ -15,17 +15,30 @@ namespace LibReplanetizer.LevelObjects
         [Category("Attributes"), DisplayName("Mission ID")]
         public int missionID { get; set; }
 
+
+        /*
+         * Unknown 1 may have something to do with difficulty tuning/existence on revisit
+         * unk1A is always 0
+         * unk1B kind of groups mobies
+         * Crates often have 4 (0b0100), 5(0b0101), 7 (0b0111) or 12 (0b1100)
+         * Enemies have 1 (0b0001), 2 (0b0010) or 3 (0b0011)
+         * Hypothesis:
+         * Enemies with 1 seem to be the once unaffected by act tuning/they always exist
+         * Enemies with 3 are act tuned (Clunk is 3 and act tuned)
+         * Mobies with the 3rd bit set correspond to crates
+         */
         [Category("Unknowns"), DisplayName("aUnknown 1")]
         public int unk1 { get; set; }
 
+        //What is this even supposed to mean?
         [Category("Attributes"), DisplayName("Data Value")]
         public int dataval { get; set; }
 
         [Category("Attributes"), DisplayName("Bolt Drop")]
         public int drop { get; set; }
 
-        [Category("Unknowns"), DisplayName("aUnknown 2")]
-        public int unk2 { get; set; }
+        [Category("Attributes"), DisplayName("Moby ID")]
+        public int mobyID { get; set; }
 
         [Category("Attributes"), DisplayName("Render Distance 1")]
         public int rend1 { get; set; }
@@ -48,15 +61,18 @@ namespace LibReplanetizer.LevelObjects
         [Category("Attributes"), DisplayName("Secondary Z")]
         public float z2 { get; set; }
 
+        //Probably less than 4 bytes
         [Category("Unknowns"), DisplayName("aUnknown 7")]
         public int unk7 { get; set; }
 
         [Category("Attributes"), DisplayName("pVar Index")]
         public int pvarIndex { get; set; }
 
+        //Probably less than 4 bytes
         [Category("Unknowns"), DisplayName("aUnknown 8")]
         public int unk8 { get; set; }
 
+        //Maybe a bitmask
         [Category("Unknowns"), DisplayName("aUnknown 9")]
         public int unk9 { get; set; }
 
@@ -112,10 +128,10 @@ namespace LibReplanetizer.LevelObjects
             int offset = num * game.mobyElemSize;
             missionID = ReadInt(mobyBlock, offset + 0x04);
             unk1 = ReadInt(mobyBlock, offset + 0x08);
-            dataval = ReadInt(mobyBlock, offset + 0x0C);
+            mobyID = ReadInt(mobyBlock, offset + 0x0C);
 
             drop = ReadInt(mobyBlock, offset + 0x10);
-            unk2 = ReadInt(mobyBlock, offset + 0x14);
+            dataval = ReadInt(mobyBlock, offset + 0x14);
             modelID = ReadInt(mobyBlock, offset + 0x18);
             float scaleHolder = ReadFloat(mobyBlock, offset + 0x1C);
 
@@ -161,10 +177,10 @@ namespace LibReplanetizer.LevelObjects
             int offset = num * game.mobyElemSize;
 
             missionID = ReadInt(mobyBlock, offset + 0x04);
-            unk1 = ReadInt(mobyBlock, offset + 0x08);
-            dataval = ReadInt(mobyBlock, offset + 0x0C);
+            dataval = ReadInt(mobyBlock, offset + 0x08);
+            unk1 = ReadInt(mobyBlock, offset + 0x0C);
 
-            unk2 = ReadInt(mobyBlock, offset + 0x10);
+            mobyID = ReadInt(mobyBlock, offset + 0x10);
             drop = ReadInt(mobyBlock, offset + 0x14);
             unk3 = ReadInt(mobyBlock, offset + 0x18);
             unk4 = ReadInt(mobyBlock, offset + 0x1C);
@@ -230,7 +246,7 @@ namespace LibReplanetizer.LevelObjects
             WriteInt(buffer, 0x0C, dataval);
 
             WriteInt(buffer, 0x10, drop);
-            WriteInt(buffer, 0x14, unk2);
+            WriteInt(buffer, 0x14, mobyID);
             WriteInt(buffer, 0x18, modelID);
             WriteFloat(buffer, 0x1C, scale.X);
 
@@ -273,10 +289,10 @@ namespace LibReplanetizer.LevelObjects
 
             WriteInt(buffer, 0x00, GameType.mobySizes[1]);
             WriteInt(buffer, 0x04, missionID);
-            WriteInt(buffer, 0x08, unk1);
-            WriteInt(buffer, 0x0C, dataval);
+            WriteInt(buffer, 0x08, dataval);
+            WriteInt(buffer, 0x0C, unk1);
 
-            WriteInt(buffer, 0x10, unk2);
+            WriteInt(buffer, 0x10, mobyID);
             WriteInt(buffer, 0x14, drop);
             WriteInt(buffer, 0x18, unk3);
             WriteInt(buffer, 0x1C, unk4);
