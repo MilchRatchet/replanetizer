@@ -62,7 +62,7 @@ namespace RatchetEdit
         public event EventHandler<RatchetEventArgs> ObjectDeleted;
 
         private ConditionalWeakTable<IRenderable, BufferContainer> bufferTable;
-        public Dictionary<Texture, int> textureIds;
+        public Dictionary<Texture, int> textureIds = new Dictionary<Texture, int>();
 
         MemoryHook hook;
 
@@ -168,7 +168,10 @@ namespace RatchetEdit
 
         void LoadLevelTextures()
         {
-            textureIds = new Dictionary<Texture, int>();
+            GL.DeleteTextures(textureIds.Count, textureIds.Values.ToArray());
+
+            textureIds.Clear();
+
             foreach (Texture t in level.textures)
             {
                 loadTexture(t);
@@ -214,15 +217,8 @@ namespace RatchetEdit
 
         void LoadCollisionBOs()
         {
-            foreach (int id in collisionIbo)
-            {
-                GL.DeleteBuffer(id);
-            }
-
-            foreach (int id in collisionVbo)
-            {
-                GL.DeleteBuffer(id);
-            }
+            GL.DeleteBuffers(collisionIbo.Count, collisionIbo.ToArray());
+            GL.DeleteBuffers(collisionVbo.Count, collisionVbo.ToArray());
 
             collisionVbo.Clear();
             collisionIbo.Clear();
