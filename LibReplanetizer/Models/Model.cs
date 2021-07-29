@@ -262,5 +262,20 @@ namespace LibReplanetizer.Models
             return indexBuffer;
         }
 
+        public static float[] GetVerticesOcean(FileStream fs, int vertexPointer, int vertexCount, int elemSize)
+        {
+            float[] vertexBuffer = new float[vertexCount * 5];
+
+            byte[] vertBlock = ReadBlock(fs, vertexPointer, vertexCount * elemSize);
+            for (int i = 0; i < vertexCount; i++)
+            {
+                vertexBuffer[(i * 5) + 0] = (ReadFloat(vertBlock, (i * elemSize) + 0x00));    //VertexX
+                vertexBuffer[(i * 5) + 1] = (ReadFloat(vertBlock, (i * elemSize) + 0x04));    //VertexY
+                vertexBuffer[(i * 5) + 2] = (ReadFloat(vertBlock, (i * elemSize) + 0x08));    //VertexZ
+                vertexBuffer[(i * 5) + 3] = (ReadFloat(vertBlock, (i * elemSize) + 0x0C));    //UVu
+                vertexBuffer[(i * 5) + 4] = (ReadFloat(vertBlock, (i * elemSize) + 0x10));    //UVv
+            }
+            return vertexBuffer;
+        }
     }
 }

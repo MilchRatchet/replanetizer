@@ -33,6 +33,7 @@ namespace LibReplanetizer
         public List<List<Texture>> armorTextures;
         public List<Texture> gadgetTextures;
         public SkyboxModel skybox;
+        public OceanModel ocean;
 
         public byte[] renderDefBytes;
         public byte[] collBytesEngine;
@@ -323,6 +324,19 @@ namespace LibReplanetizer
             using (VramParser vramParser = new VramParser(path + @"/vram.ps3"))
             {
                 vramParser.GetTextures(textures);
+            }
+
+            {
+                string superFolder = Directory.GetParent(enginePath).Parent.FullName;
+                string oceanFile = superFolder + @"\global\oceanVerts.ps3";
+
+                if (File.Exists(oceanFile))
+                {
+                    using (OceanVertsParser ovParser = new OceanVertsParser(game, oceanFile))
+                    {
+                        ocean = ovParser.GetModel();
+                    }
+                }
             }
 
             Logger.Info("Level parsing done");
