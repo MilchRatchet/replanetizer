@@ -16,6 +16,23 @@ namespace LibReplanetizer.Serializers
         {
             FileStream fs = File.Open(fileName, FileMode.Create);
 
+            switch (level.game.num)
+            {
+                case 1:
+                    SaveRC1(level, fs);
+                    break;
+                case 2:
+                    SaveRC2(level, fs);
+                    break;
+                default:
+                    break;
+            }
+
+            fs.Close();
+        }
+
+        private void SaveRC1(Level level, FileStream fs)
+        {
             //Seek past the header
             fs.Seek(0xA0, SeekOrigin.Begin);
 
@@ -63,8 +80,59 @@ namespace LibReplanetizer.Serializers
             byte[] head = gameplayHeader.Serialize(level.game);
             fs.Seek(0, SeekOrigin.Begin);
             fs.Write(head, 0, head.Length);
+        }
 
-            fs.Close();
+        private void SaveRC2(Level level, FileStream fs)
+        {
+            //Seek past the header
+            fs.Seek(0xA0, SeekOrigin.Begin);
+
+            GameplayHeader gameplayHeader = new GameplayHeader
+            {
+                unkPointer18 = SeekWrite(fs, level.unk18),
+                levelVarPointer = SeekWrite(fs, level.levelVariables.Serialize(level.game)),
+                englishPointer = SeekWrite(fs, GetLangBytes(level.english)),
+                ukenglishPointer = SeekWrite(fs, GetLangBytes(level.ukenglish)),
+                frenchPointer = SeekWrite(fs, GetLangBytes(level.french)),
+                germanPointer = SeekWrite(fs, GetLangBytes(level.german)),
+                spanishPointer = SeekWrite(fs, GetLangBytes(level.spanish)),
+                italianPointer = SeekWrite(fs, GetLangBytes(level.italian)),
+                japanesePointer = SeekWrite(fs, GetLangBytes(level.japanese)),
+                koreanPointer = SeekWrite(fs, GetLangBytes(level.korean)),
+                lightsPointer = SeekWrite(fs, SerializeLevelObjects(level.directionalLights, DirectionalLight.ELEMENTSIZE)),
+                type80Pointer = SeekWrite(fs, GetType80Bytes(level.type80s)),
+                cameraPointer = SeekWrite(fs, SerializeLevelObjects(level.gameCameras, GameCamera.ELEMENTSIZE)),
+                soundPointer = SeekWrite(fs, SerializeLevelObjects(level.type0Cs, Type0C.ELEMENTSIZE)),
+                mobyIdPointer = SeekWrite(fs, GetIdBytes(level.mobyIds)),
+                mobyPointer = SeekWrite(fs, GetMobyBytes(level.mobs, level.game)),
+                pvarSizePointer = SeekWrite(fs, GetPvarSizeBytes(level.pVars)),
+                pvarPointer = SeekWrite(fs, GetPvarBytes(level.pVars)),
+                type50Pointer = SeekWrite(fs, GetKeyValueBytes(level.type50s)),
+                type5CPointer = SeekWrite(fs, GetKeyValueBytes(level.type5Cs)),
+                mobyGroupsPointer = SeekWrite(fs, level.unk6),
+                type4CPointer = SeekWrite(fs, level.unk7),
+                tieIdPointer = SeekWrite(fs, GetIdBytes(level.tieIds)),
+                tiePointer = SeekWrite(fs, level.tieData),
+                tieGroupsPointer = SeekWrite(fs, level.tieGroupData),
+                shrubIdPointer = SeekWrite(fs, GetIdBytes(level.shrubIds)),
+                shrubPointer = SeekWrite(fs, level.shrubData),
+                shrubGroupsPointer = SeekWrite(fs, level.shrubGroupData),
+                splinePointer = SeekWrite(fs, GetSplineBytes(level.splines)),
+                cuboidPointer = SeekWrite(fs, SerializeLevelObjects(level.cuboids, Cuboid.ELEMENTSIZE)),
+                spherePointer = SeekWrite(fs, SerializeLevelObjects(level.spheres, Sphere.ELEMENTSIZE)),
+                cylinderPointer = SeekWrite(fs, SerializeLevelObjects(level.cylinders, Cylinder.ELEMENTSIZE)),
+                unkPointer12 = SeekWrite(fs, new byte[0x10]),
+                unkPointer17 = SeekWrite(fs, level.unk17),
+                unkPointer16 = SeekWrite(fs, level.unk16),
+                grindPathsPointer = SeekWrite(fs, level.unk13),
+                areasPointer = SeekWrite(fs, level.areasData),
+                occlusionPointer = SeekWrite(fs, GetOcclusionBytes(level.occlusionData))
+            };
+
+            //Seek to the beginning of the file to append the updated header
+            byte[] head = gameplayHeader.Serialize(level.game);
+            fs.Seek(0, SeekOrigin.Begin);
+            fs.Write(head, 0, head.Length);
         }
 
         private int SeekWrite(FileStream fs, byte[] bytes)
@@ -83,7 +151,7 @@ namespace LibReplanetizer.Serializers
         {
             while (fs.Position % 0x10 != 0)
             {
-                fs.Seek(4, SeekOrigin.Current);
+                fs.Seek(2, SeekOrigin.Current);
             }
         }
 

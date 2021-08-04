@@ -73,8 +73,11 @@ namespace LibReplanetizer
         public byte[] unk9;
         public byte[] unk12;
         public byte[] unk13;
-        public byte[] unk17;
         public byte[] unk14;
+        public byte[] unk16;
+        public byte[] unk17;
+        public byte[] unk18;
+
 
         public LightConfig lightConfig;
 
@@ -83,6 +86,11 @@ namespace LibReplanetizer
 
         public byte[] tieData;
         public byte[] shrubData;
+
+        public byte[] tieGroupData;
+        public byte[] shrubGroupData;
+
+        public byte[] areasData;
 
         public List<DirectionalLight> directionalLights;
         public List<Type0C> type0Cs;
@@ -209,11 +217,18 @@ namespace LibReplanetizer
                 unk7 = gameplayParser.GetUnk7();
                 unk12 = gameplayParser.GetUnk12();
                 unk13 = gameplayParser.GetUnk13();
-                unk17 = gameplayParser.GetUnk17();
                 unk14 = gameplayParser.GetUnk14();
+                unk16 = gameplayParser.GetUnk16();
+                unk17 = gameplayParser.GetUnk17();
+                unk18 = gameplayParser.GetUnk18();
 
                 tieData = gameplayParser.GetTieData(ties.Count);
                 shrubData = gameplayParser.getShrubData(shrubs.Count);
+
+                tieGroupData = gameplayParser.getTieGroups();
+                shrubGroupData = gameplayParser.getShrubGroups();
+
+                areasData = gameplayParser.getAreasData();
 
                 directionalLights = gameplayParser.GetDirectionalLights();
                 type0Cs = gameplayParser.GetType0Cs();

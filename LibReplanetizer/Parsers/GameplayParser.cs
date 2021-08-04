@@ -346,11 +346,25 @@ namespace LibReplanetizer.Parsers
 
         }
 
+        public byte[] GetUnk16()
+        {
+            if (gameplayHeader.unkPointer16 == 0) { return null; }
+            int amount = ReadInt(ReadBlock(fileStream, gameplayHeader.unkPointer16, 4), 0);
+            return ReadBlock(fileStream, gameplayHeader.unkPointer16, 0x10 + amount * 0x410);
+        }
+
         public byte[] GetUnk17()
         {
             if (gameplayHeader.unkPointer17 == 0) { return null; }
             int sectionLength = ReadInt(ReadBlock(fileStream, gameplayHeader.unkPointer17, 4), 0);
             return ReadBlock(fileStream, gameplayHeader.unkPointer17, sectionLength);
+        }
+
+        public byte[] GetUnk18()
+        {
+            if (gameplayHeader.unkPointer18 == 0) { return null; }
+            int amount = ReadInt(ReadBlock(fileStream, gameplayHeader.unkPointer18, 4), 0);
+            return ReadBlock(fileStream, gameplayHeader.unkPointer18, 0x10 + amount * 0x20);
         }
 
         public byte[] GetUnk14()
@@ -428,12 +442,38 @@ namespace LibReplanetizer.Parsers
 
         public byte[] GetTieData(int tieCount)
         {
+            if (gameplayHeader.tiePointer == 0) { return null; }
             return ReadBlock(fileStream, gameplayHeader.tiePointer, 0x10 + 0xE0 * tieCount);
         }
 
         public byte[] getShrubData(int shrubCount)
         {
             return ReadBlock(fileStream, gameplayHeader.shrubPointer, 0x10 + 0x70 * shrubCount);
+        }
+
+        public byte[] getTieGroups()
+        {
+            if (gameplayHeader.tieGroupsPointer == 0) { return null; }
+            byte[] header = ReadBlock(fileStream, gameplayHeader.tieGroupsPointer, 16);
+            int count = ReadInt(header, 0);
+            int length = ReadInt(header, 4);
+            return ReadBlock(fileStream, gameplayHeader.tieGroupsPointer, 0x10 + length + count * 0x4);
+        }
+
+        public byte[] getShrubGroups()
+        {
+            if (gameplayHeader.shrubGroupsPointer == 0) { return null; }
+            byte[] header = ReadBlock(fileStream, gameplayHeader.shrubGroupsPointer, 16);
+            int count = ReadInt(header, 0);
+            int length = ReadInt(header, 4);
+            return ReadBlock(fileStream, gameplayHeader.shrubGroupsPointer, 0x10 + length + count * 0x4);
+        }
+
+        public byte[] getAreasData()
+        {
+            if (gameplayHeader.areasPointer == 0) { return null; }
+            int length = ReadInt(ReadBlock(fileStream, gameplayHeader.areasPointer, 4), 0);
+            return ReadBlock(fileStream, gameplayHeader.areasPointer, 0x20 + length + 0x10);
         }
 
 
