@@ -334,7 +334,21 @@ namespace LibReplanetizer.Parsers
 
         public byte[] GetUnk13()
         {
-            int sectionLength = gameplayHeader.occlusionPointer - gameplayHeader.grindPathsPointer;
+            int sectionLength;
+            
+            switch (game.num)
+            {
+                case 1:
+                    sectionLength = gameplayHeader.occlusionPointer - gameplayHeader.grindPathsPointer;
+                    break;
+                case 2:
+                case 3:
+                case 4:
+                default:
+                    sectionLength = gameplayHeader.areasPointer - gameplayHeader.grindPathsPointer;
+                    break;
+            }
+            
             if (sectionLength > 0)
             {
                 return ReadBlock(fileStream, gameplayHeader.grindPathsPointer, sectionLength);
@@ -349,8 +363,7 @@ namespace LibReplanetizer.Parsers
         public byte[] GetUnk16()
         {
             if (gameplayHeader.unkPointer16 == 0) { return null; }
-            int amount = ReadInt(ReadBlock(fileStream, gameplayHeader.unkPointer16, 4), 0);
-            return ReadBlock(fileStream, gameplayHeader.unkPointer16, 0x10 + amount * 0x410);
+            return ReadBlock(fileStream, gameplayHeader.unkPointer16, gameplayHeader.grindPathsPointer - gameplayHeader.unkPointer16);
         }
 
         public byte[] GetUnk17()
@@ -440,10 +453,23 @@ namespace LibReplanetizer.Parsers
             return data;
         }
 
+        //In RaC 2/3 each element should be of size 0x60 but the block is much larger and not a multiple of that
+        //Hence we just load the block based on pointers
         public byte[] GetTieData(int tieCount)
         {
             if (gameplayHeader.tiePointer == 0) { return null; }
-            return ReadBlock(fileStream, gameplayHeader.tiePointer, 0x10 + 0xE0 * tieCount);
+
+            switch (game.num)
+            {
+                case 1:
+                    return ReadBlock(fileStream, gameplayHeader.tiePointer, 0x10 + 0xE0 * tieCount);
+                case 2:
+                case 3:
+                case 4:
+                default:
+                    return ReadBlock(fileStream, gameplayHeader.tiePointer, gameplayHeader.tieGroupsPointer - gameplayHeader.tiePointer);
+            }
+            
         }
 
         public byte[] getShrubData(int shrubCount)
@@ -472,11 +498,8 @@ namespace LibReplanetizer.Parsers
         public byte[] getAreasData()
         {
             if (gameplayHeader.areasPointer == 0) { return null; }
-            int length = ReadInt(ReadBlock(fileStream, gameplayHeader.areasPointer, 4), 0);
-            return ReadBlock(fileStream, gameplayHeader.areasPointer, 0x20 + length + 0x10);
+            return ReadBlock(fileStream, gameplayHeader.areasPointer, gameplayHeader.occlusionPointer - gameplayHeader.areasPointer);
         }
-
-
 
         public List<byte[]> GetPvars(List<Moby> mobs)
         {
