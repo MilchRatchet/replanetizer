@@ -70,6 +70,7 @@ namespace LibReplanetizer
 
         public byte[] unk6;
         public byte[] unk7;
+        public byte[] unk8;
         public byte[] unk9;
         public byte[] unk12;
         public byte[] unk13;
@@ -185,6 +186,8 @@ namespace LibReplanetizer
                 textureConfigMenus = engineParser.GetTextureConfigMenu();
 
                 collisionEngine = engineParser.GetCollisionModel();
+
+                unk8 = engineParser.GetUnk8Bytes();
             }
 
 

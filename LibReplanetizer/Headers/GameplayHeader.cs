@@ -371,7 +371,7 @@ namespace LibReplanetizer.Headers
 
         private byte[] SerializeDL()
         {
-            byte[] bytes = new byte[GAMEPLAYSIZE];
+            byte[] bytes = new byte[0x90];
 
             WriteInt(bytes, 0x00, levelVarPointer);
             WriteInt(bytes, 0x04, cameraPointer);

@@ -5,7 +5,7 @@ namespace LibReplanetizer.Headers
 {
     public class EngineHeader
     {
-        const int RAC123ENGINESIZE = 0x78;
+        const int RAC123ENGINESIZE = 0x84;
         const int DLENGINESIZE = 0x90;
 
         public GameType game;
@@ -136,6 +136,10 @@ namespace LibReplanetizer.Headers
 
             texture2dPointer = ReadInt(engineHeadBlock, 0x70);
             uiElementPointer = ReadInt(engineHeadBlock, 0x74);
+            unk5Pointer = ReadInt(engineHeadBlock, 0x78);
+            unk6Pointer = ReadInt(engineHeadBlock, 0x7C);
+
+            unk7Pointer = ReadInt(engineHeadBlock, 0x80);
         }
 
         private void GetDLVals(FileStream engineFile)
@@ -244,6 +248,10 @@ namespace LibReplanetizer.Headers
 
             WriteInt(bytes, 0x70, texture2dPointer);
             WriteInt(bytes, 0x74, uiElementPointer);
+            WriteInt(bytes, 0x78, unk5Pointer);
+            WriteInt(bytes, 0x7C, unk6Pointer);
+
+            WriteInt(bytes, 0x80, unk7Pointer);
 
             return bytes;
         }

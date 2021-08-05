@@ -115,27 +115,62 @@ namespace LibReplanetizer.Parsers
         {
             if (engineHead.collisionPointer > 0)
             {
-                byte[] headBlock = ReadBlock(fileStream, engineHead.collisionPointer, 8);
-                int collisionStart = engineHead.collisionPointer + ReadInt(headBlock, 0);
-                int collisionLength = ReadInt(headBlock, 4);
-                int totalLength = collisionStart + collisionLength - engineHead.collisionPointer;
+                if (engineHead.game.num == 1)
+                {
+                    byte[] headBlock = ReadBlock(fileStream, engineHead.collisionPointer, 8);
+                    int collisionStart = engineHead.collisionPointer + ReadInt(headBlock, 0);
+                    int collisionLength = ReadInt(headBlock, 4);
+                    int totalLength = collisionStart + collisionLength - engineHead.collisionPointer;
 
-                return ReadArbBytes(engineHead.collisionPointer, totalLength);
+                    return ReadArbBytes(engineHead.collisionPointer, totalLength);
+                } else
+                {
+                    return ReadBlock(fileStream, engineHead.collisionPointer, engineHead.tieModelPointer - engineHead.collisionPointer);
+                }
+
             }
             else
             {
-                return new byte[0];
+                return null;
             }
         }
 
         public byte[] GetBillboardBytes()
         {
-            return ReadArbBytes(engineHead.texture2dPointer, engineHead.soundConfigPointer - engineHead.texture2dPointer);
+            switch (engineHead.game.num)
+            {
+                case 1:
+                    return ReadArbBytes(engineHead.texture2dPointer, engineHead.soundConfigPointer - engineHead.texture2dPointer);
+                case 2:
+                case 3:
+                case 4:
+                default:
+                    return ReadArbBytes(engineHead.texture2dPointer, engineHead.mobyModelPointer - engineHead.texture2dPointer);
+            }
+         
         }
 
         public byte[] GetSoundConfigBytes()
         {
-            return ReadArbBytes(engineHead.soundConfigPointer, engineHead.lightPointer - engineHead.soundConfigPointer);
+            switch (engineHead.game.num)
+            {
+                case 1:
+                    return ReadArbBytes(engineHead.soundConfigPointer, engineHead.lightPointer - engineHead.soundConfigPointer);
+                case 2:
+                case 3:
+                case 4:
+                default:
+                    return ReadArbBytes(engineHead.soundConfigPointer, engineHead.playerAnimationPointer - engineHead.soundConfigPointer);
+            }
+            
+        }
+
+        public byte[] GetUnk8Bytes()
+        {
+            if (engineHead.unk8Pointer == 0) { return null; }
+            byte[] head = ReadBlock(fileStream, engineHead.unk8Pointer, 16);
+            int amount = ReadInt(head, 4);
+            return ReadBlock(fileStream, engineHead.unk8Pointer, 0x10 + amount);
         }
 
         public void Dispose()
