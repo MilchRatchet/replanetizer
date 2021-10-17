@@ -24,6 +24,7 @@ layout(std140) uniform lights{
 out vec2 UV;
 out vec3 lightColor;
 out float fogBlend;
+out float lightScale;
 
 // Values that stay constant for the whole mesh.
 uniform mat4 WorldToView;
@@ -57,6 +58,8 @@ float quick_exp(float x) {
 void main() {
 	// Output position of the vertex, in clip space : MVP * position
 	gl_Position = WorldToView * (ModelToWorld * vec4(vertexPosition_modelspace, 1.0f));
+
+    lightScale = (dot(vertexNormal, vertexNormal) < 0.5f) ? 2.0f : 1.0f;
 
 	vec3 normal = normalize((ModelToWorld * vec4(vertexNormal, 0.0f)).xyz);
 

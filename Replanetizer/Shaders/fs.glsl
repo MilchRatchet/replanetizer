@@ -4,6 +4,7 @@
 in vec2 UV;
 in vec3 lightColor;
 in float fogBlend;
+in float lightScale;
 
 // Ouput data
 layout(location = 0) out vec4 color;
@@ -41,6 +42,8 @@ void main() {
 	color.w = textureColor.w;
 
 	color.xyz = mix(color.xyz, fogColor.xyz, fogBlend);
+
+    color.xyz *= lightScale;
 
 	id = (levelObjectType << 24) | levelObjectNumber;
 }
