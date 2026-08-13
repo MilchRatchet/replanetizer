@@ -157,6 +157,23 @@ namespace Replanetizer.Utils
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         }
 
+        public bool TryReadDepth(int x, int y, out float depth)
+        {
+            depth = 1.0f;
+            if (x < 0 || x >= width || y < 0 || y >= height)
+                return false;
+
+            int renderX = Math.Min(RenderWidth - 1, x * RenderWidth / width);
+            int renderY = Math.Min(RenderHeight - 1, (height - 1 - y) * RenderHeight / height);
+
+            int previousFramebuffer = GL.GetInteger(GetPName.FramebufferBinding);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, framebufferID);
+            GL.ReadPixels(renderX, renderY, 1, 1, PixelFormat.DepthComponent, PixelType.Float, ref depth);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, previousFramebuffer);
+
+            return depth >= 0.0f && depth < 1.0f;
+        }
+
         public void Dispose()
         {
             Dispose(true);

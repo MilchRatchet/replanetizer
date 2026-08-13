@@ -65,6 +65,19 @@ namespace Replanetizer.Frames
         {
             mouseButton = MouseButton.Right
         };
+        private MouseGrabHandler orbitMouseGrabHandler = new()
+        {
+            mouseButton = MouseButton.Left
+        };
+        private MouseGrabHandler zoomMouseGrabHandler = new()
+        {
+            mouseButton = MouseButton.Right
+        };
+        private bool orbitGestureActive;
+        private bool orbitGestureConsumed;
+        private bool zoomGestureActive;
+        private bool zoomGestureConsumed;
+        private const float ZOOM_DRAG_SPEED = 0.1f;
         public readonly Keymap KEYMAP;
 
         public bool initialized, invalidate;
@@ -784,21 +797,137 @@ namespace Replanetizer.Frames
         /// <returns>whether the cursor is being grabbed</returns>
         private bool CheckForRotationInput(float deltaTime, bool allowNewGrab)
         {
-            if (mouseGrabHandler.TryGrabMouse(wnd, allowNewGrab))
+            bool isAltDown = wnd.KeyboardState.IsKeyDown(Keys.LeftAlt) ||
+                wnd.KeyboardState.IsKeyDown(Keys.RightAlt);
+            bool isRotating = false;
+
+            if (isAltDown)
+            {
+                mouseGrabHandler.Cancel(wnd);
+            }
+            bool isOrbiting = CheckForOrbitInput(allowNewGrab, isAltDown);
+            bool isZooming = CheckForZoomInput(allowNewGrab, isAltDown);
+
+            if (!isAltDown && !zoomGestureConsumed && mouseGrabHandler.TryGrabMouse(wnd, allowNewGrab))
+            {
+                isRotating = true;
+            }
+
+            if (isRotating)
+            {
+                Vector2 rot = new Vector2(wnd.MouseState.Delta.X * 0.016666f, wnd.MouseState.Delta.Y * 0.016666f);
+
+                rot *= camera.speed;
+
+                camera.Rotate(rot);
+                InvalidateView();
+            }
+
+            bool isGrabbing = isOrbiting || isZooming || isRotating;
+            if (isGrabbing)
                 ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.NoMouse;
             else
-            {
                 ImGui.GetIO().ConfigFlags &= ~ImGuiConfigFlags.NoMouse;
+
+            return isGrabbing;
+        }
+
+        private bool CheckForOrbitInput(bool allowNewGrab, bool isAltDown)
+        {
+            bool isLeftDown = wnd.MouseState.IsButtonDown(MouseButton.Left);
+            if (!isLeftDown)
+            {
+                orbitGestureActive = false;
+                orbitGestureConsumed = false;
+                camera.EndOrbit();
+                orbitMouseGrabHandler.Cancel(wnd);
                 return false;
             }
 
-            Vector2 rot = new Vector2(wnd.MouseState.Delta.X * 0.016666f, wnd.MouseState.Delta.Y * 0.016666f);
+            if (!isAltDown)
+            {
+                if (orbitGestureActive)
+                {
+                    orbitGestureActive = false;
+                    orbitGestureConsumed = true;
+                    camera.EndOrbit();
+                    orbitMouseGrabHandler.Cancel(wnd);
+                }
+                return false;
+            }
 
-            rot *= camera.speed;
+            orbitGestureConsumed = true;
+            if (!orbitMouseGrabHandler.TryGrabMouse(wnd, allowNewGrab))
+                return false;
 
-            camera.Rotate(rot);
+            if (!orbitGestureActive)
+            {
+                orbitGestureActive = true;
+                if (TryGetWorldPointAtMouse(out Vector3 worldPoint))
+                    camera.BeginOrbit(worldPoint);
+                return true;
+            }
 
+            camera.UpdateOrbit(new Vector2(
+                wnd.MouseState.Delta.X * 0.016666f * camera.speed,
+                wnd.MouseState.Delta.Y * 0.016666f * camera.speed
+            ));
             InvalidateView();
+            return true;
+        }
+
+        private bool CheckForZoomInput(bool allowNewGrab, bool isAltDown)
+        {
+            bool isRightDown = wnd.MouseState.IsButtonDown(MouseButton.Right);
+            if (!isRightDown || !isAltDown || wnd.MouseState.IsButtonDown(MouseButton.Left))
+            {
+                if (zoomGestureActive)
+                {
+                    zoomGestureActive = false;
+                    zoomGestureConsumed = true;
+                    camera.EndZoom();
+                    zoomMouseGrabHandler.Cancel(wnd);
+                }
+                else if (!isRightDown)
+                {
+                    zoomGestureConsumed = false;
+                }
+                return false;
+            }
+
+            zoomGestureConsumed = true;
+            if (!zoomMouseGrabHandler.TryGrabMouse(wnd, allowNewGrab))
+                return false;
+
+            if (!zoomGestureActive)
+            {
+                zoomGestureActive = true;
+                if (TryGetWorldPointAtMouse(out Vector3 worldPoint))
+                    camera.BeginZoom(worldPoint);
+                return true;
+            }
+
+            camera.UpdateZoom(
+                wnd.MouseState.Delta.Y,
+                camera.speed * ZOOM_DRAG_SPEED
+            );
+            InvalidateView();
+            return true;
+        }
+
+        private bool TryGetWorldPointAtMouse(out Vector3 worldPoint)
+        {
+            worldPoint = Vector3.Zero;
+            if (renderer == null || !renderer.TryReadDepth((int) mousePos.X, (int) mousePos.Y, out float depth))
+                return false;
+
+            Matrix4 projection = camera.GetProjectionMatrix();
+            worldPoint = UnProject(
+                ref projection,
+                camera.GetViewMatrix(),
+                new Size(width, height),
+                new Vector3(mousePos.X, mousePos.Y, depth * 2.0f - 1.0f)
+            );
             return true;
         }
 
@@ -863,6 +992,8 @@ namespace Replanetizer.Frames
             Point absoluteMousePos = new Point((int) wnd.MousePosition.X, (int) wnd.MousePosition.Y);
             var isWindowHovered = ImGui.IsWindowHovered();
             var isMouseInContentRegion = contentRegion.Contains(absoluteMousePos);
+            bool isAltDown = wnd.KeyboardState.IsKeyDown(Keys.LeftAlt) ||
+                wnd.KeyboardState.IsKeyDown(Keys.RightAlt);
             // Allow rotation if the cursor is directly over the level frame,
             // otherwise defer handling to any foreground frames
             var isRotating = CheckForRotationInput(deltaTime, isWindowHovered);
@@ -879,7 +1010,7 @@ namespace Replanetizer.Frames
 
             Vector3 mouseRay = MouseToWorldRay(camera.GetProjectionMatrix(), camera.GetViewMatrix(), new Size(width, height), mousePos);
 
-            if (!HandleLeftMouseDown(mouseRay))
+            if (!orbitGestureActive && !orbitGestureConsumed && !isAltDown && !HandleLeftMouseDown(mouseRay))
             {
                 xLock = false;
                 yLock = false;
@@ -1174,6 +1305,10 @@ namespace Replanetizer.Frames
 
         public override void Dispose()
         {
+            camera.CancelNavigation();
+            mouseGrabHandler.Cancel(wnd);
+            orbitMouseGrabHandler.Cancel(wnd);
+            zoomMouseGrabHandler.Cancel(wnd);
             hook?.Dispose();
 
             selectedObjects.CollectionChanged -= SelectedObjectsOnCollectionChanged;

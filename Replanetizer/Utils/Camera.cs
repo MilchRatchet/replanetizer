@@ -48,6 +48,13 @@ namespace Replanetizer.Utils
         private Matrix4 viewMatrix = new Matrix4();
         private Matrix4 worldViewMatrix = new Matrix4();
 
+        private bool orbitActive;
+        private Vector3 orbitPivot;
+        private Vector3 orbitReference;
+        private bool zoomActive;
+        private Vector3 zoomPivot;
+        private Vector3 zoomReference;
+
         private Matrix3 GetRotationMatrix()
         {
             return Matrix3.CreateRotationX(rotation.X) * Matrix3.CreateRotationY(rotation.Y) * Matrix3.CreateRotationZ(rotation.Z);
@@ -62,11 +69,96 @@ namespace Replanetizer.Utils
             return result;
         }
 
+        public Vector3 GetForward()
+        {
+            Vector3 forward = LegacyTransform(Vector3.UnitY, GetRotationMatrix());
+            forward.Normalize();
+            return forward;
+        }
+
+        public Vector3 TransformDirection(Vector3 direction, Vector3 sourceRotation, Vector3 destinationRotation)
+        {
+            Matrix3 sourceMatrix = Matrix3.CreateRotationX(sourceRotation.X) *
+                Matrix3.CreateRotationY(sourceRotation.Y) *
+                Matrix3.CreateRotationZ(sourceRotation.Z);
+            Matrix3 destinationMatrix = Matrix3.CreateRotationX(destinationRotation.X) *
+                Matrix3.CreateRotationY(destinationRotation.Y) *
+                Matrix3.CreateRotationZ(destinationRotation.Z);
+
+            Vector3 localDirection = LegacyTransform(direction, Matrix3.Invert(sourceMatrix));
+            return LegacyTransform(localDirection, destinationMatrix);
+        }
+
+        public bool BeginOrbit(Vector3 clickedWorldPoint)
+        {
+            Vector3 reference = clickedWorldPoint - position;
+            if (reference.Length <= near)
+                return false;
+
+            orbitPivot = clickedWorldPoint;
+            orbitReference = reference;
+            orbitActive = true;
+            return true;
+        }
+
+        public void UpdateOrbit(Vector2 rotationDelta)
+        {
+            if (!orbitActive)
+                return;
+
+            Vector3 previousRotation = rotation;
+            Rotate(rotationDelta);
+            orbitReference = TransformDirection(orbitReference, previousRotation, rotation);
+            position = orbitPivot - orbitReference;
+        }
+
+        public void EndOrbit()
+        {
+            orbitActive = false;
+        }
+
+        public bool BeginZoom(Vector3 clickedWorldPoint)
+        {
+            Vector3 reference = clickedWorldPoint - position;
+            if (reference.Length <= near)
+                return false;
+
+            zoomPivot = clickedWorldPoint;
+            zoomReference = reference;
+            zoomActive = true;
+            return true;
+        }
+
+        public void UpdateZoom(float mouseDeltaY, float zoomSpeed)
+        {
+            if (!zoomActive)
+                return;
+
+            float distance = zoomReference.Length;
+            float zoomAmount = -mouseDeltaY * zoomSpeed;
+            float newDistance = MathHelper.Clamp(distance - zoomAmount, near, far);
+            Vector3 movement = zoomReference.Normalized() * (distance - newDistance);
+
+            position += movement;
+            zoomReference -= movement;
+        }
+
+        public void EndZoom()
+        {
+            zoomActive = false;
+        }
+
+        public void CancelNavigation()
+        {
+            orbitActive = false;
+            zoomActive = false;
+        }
+
         private void UpdateMatrices()
         {
             projectionMatrix = Matrix4.CreatePerspectiveFieldOfView(fovy, aspect, near, far);
 
-            Vector3 forward = LegacyTransform(Vector3.UnitY, GetRotationMatrix());
+            Vector3 forward = GetForward();
             viewMatrix = Matrix4.LookAt(position, position + forward, Vector3.UnitZ);
 
             worldViewMatrix = viewMatrix * projectionMatrix;

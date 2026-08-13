@@ -55,5 +55,13 @@ namespace Replanetizer.Utils
 
             return isGrabbed;
         }
+
+        public void Cancel(Window wnd)
+        {
+            if (!isGrabbed) return;
+
+            isGrabbed = false;
+            wnd.CursorState = OpenTK.Windowing.Common.CursorState.Normal;
+        }
     }
 }
