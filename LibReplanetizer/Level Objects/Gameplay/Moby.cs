@@ -220,7 +220,7 @@ namespace LibReplanetizer.LevelObjects
         public int cutscene { get; set; }
 
         [Category("Attributes"), DisplayName("pVars")]
-        public byte[] pVars { get; set; }
+        public PVars pVars { get; set; }
 
         private long pVarMemoryAddress;
 
@@ -247,7 +247,7 @@ namespace LibReplanetizer.LevelObjects
         public Moby(GameType game)
         {
             this.game = game;
-            this.pVars = new byte[0];
+            this.pVars = new RawPVars();
             this.mobyID = MAX_ID++;
         }
 
@@ -259,7 +259,7 @@ namespace LibReplanetizer.LevelObjects
             this.rotation = rotation;
             this.scale = scale;
             this.mobyID = MAX_ID++;
-            this.pVars = new byte[0];
+            this.pVars = new RawPVars();
 
             UpdateTransformMatrix();
         }
@@ -305,7 +305,7 @@ namespace LibReplanetizer.LevelObjects
             UpdateTransformMatrix();
         }
 
-        public Moby(GameType game, byte[] mobyBlock, int num, List<Model> mobyModels, List<byte[]> pVars, bool fromMemory = false)
+        public Moby(GameType game, byte[] mobyBlock, int num, List<Model> mobyModels, List<PVars> pVars, bool fromMemory = false)
         {
             this.game = game;
 
@@ -331,14 +331,30 @@ namespace LibReplanetizer.LevelObjects
                 MAX_ID = this.mobyID + 1;
             }
 
-            if (this.pvarIndex != -1)
+            if (this.pvarIndex >= 0 && this.pvarIndex < pVars.Count)
             {
-                this.pVars = pVars[this.pvarIndex];
+                this.pVars = PVarFactory.Create(game, modelID, pVars[this.pvarIndex]);
             }
             else
             {
-                this.pVars = new byte[0];
+                this.pVars = new RawPVars();
             }
+        }
+
+        public Moby(GameType game, byte[] mobyBlock, int num, List<Model> mobyModels, List<byte[]> pVars, bool fromMemory = false)
+            : this(game, mobyBlock, num, mobyModels, ConvertPVars(pVars), fromMemory)
+        {
+        }
+
+        private static List<PVars> ConvertPVars(List<byte[]> pVars)
+        {
+            var converted = new List<PVars>(pVars.Count);
+            foreach (byte[] pVar in pVars)
+            {
+                converted.Add(new RawPVars(pVar));
+            }
+
+            return converted;
         }
 
         private void GetRC1Vals(GameType game, byte[] mobyBlock, int num, List<Model> mobyModels)

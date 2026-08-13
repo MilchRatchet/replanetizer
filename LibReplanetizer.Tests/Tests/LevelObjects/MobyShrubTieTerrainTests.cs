@@ -294,7 +294,7 @@ namespace LibReplanetizer.Tests.LevelObjects
 
             Assert.Equal(200, ReadInt(serialized, 0x64));
             Assert.Equal(100, ReadInt(serialized, 0x68));
-            Assert.Equal(50,  ReadInt(serialized, 0x6C));
+            Assert.Equal(50, ReadInt(serialized, 0x6C));
         }
 
         [Fact]

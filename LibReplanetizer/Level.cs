@@ -109,7 +109,7 @@ namespace LibReplanetizer
         public List<GrindPath> grindPaths;
         public List<GlobalPvarBlock> pvarBlocks;
 
-        public List<byte[]> pVars;
+        public List<PVars> pVars;
         public List<Cuboid> cuboids;
         public List<Sphere> spheres;
         public List<Cylinder> cylinders;

@@ -117,7 +117,7 @@ namespace LibReplanetizer.Parsers
 
 
         // TODO consolidate all these into a single function, as they work pretty much the same
-        public List<Moby> GetMobies(List<Model> mobyModels, List<byte[]> pVars)
+        public List<Moby> GetMobies(List<Model> mobyModels, List<PVars> pVars)
         {
             var mobs = new List<Moby>();
 
@@ -573,9 +573,9 @@ namespace LibReplanetizer.Parsers
             return ReadBlock(fileStream, gameplayHeader.areasPointer, endPointer - gameplayHeader.areasPointer);
         }
 
-        public List<byte[]> GetPvars()
+        public List<PVars> GetPvars()
         {
-            var pVars = new List<byte[]>();
+            var pVars = new List<PVars>();
 
             byte[] pVarSizes = ReadBlock(fileStream, gameplayHeader.pvarSizePointer, gameplayHeader.pvarPointer - gameplayHeader.pvarSizePointer);
 
@@ -595,7 +595,7 @@ namespace LibReplanetizer.Parsers
                 uint mobpVarsStart = ReadUint(pVarSizes, (i * 8));
                 uint mobpVarsCount = ReadUint(pVarSizes, (i * 8) + 0x04);
                 byte[] mobpVars = GetBytes(pVarBlock, (int) mobpVarsStart, (int) mobpVarsCount);
-                pVars.Add(mobpVars);
+                pVars.Add(new RawPVars(mobpVars));
             }
 
             return pVars;

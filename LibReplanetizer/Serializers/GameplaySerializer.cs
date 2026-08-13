@@ -496,7 +496,7 @@ namespace LibReplanetizer.Serializers
             return bytes;
         }
 
-        public byte[] GetPvarSizeBytes(List<byte[]> pVars)
+        public byte[] GetPvarSizeBytes(List<PVars> pVars)
         {
             if (pVars == null) return [];
 
@@ -511,16 +511,17 @@ namespace LibReplanetizer.Serializers
             return bytes;
         }
 
-        public byte[] GetPvarBytes(List<byte[]> pVars)
+        public byte[] GetPvarBytes(List<PVars> pVars)
         {
             if (pVars == null) return new byte[0x10];
 
-            var bytes = new byte[pVars.Sum(arr => arr.Length)];
+            var bytes = new byte[pVars.Sum(pVar => pVar.Length)];
             int index = 0;
             foreach (var pVar in pVars)
             {
-                pVar.CopyTo(bytes, index);
-                index += pVar.Length;
+                byte[] pVarBytes = pVar.ToByteArray();
+                pVarBytes.CopyTo(bytes, index);
+                index += pVarBytes.Length;
             }
 
             return bytes;
