@@ -7,8 +7,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading;
 using LibReplanetizer;
 using LibReplanetizer.LevelObjects;
@@ -22,42 +20,14 @@ namespace Replanetizer.MemoryHook
 {
     public class MemoryHookHandle : IDisposable
     {
-        // Read and write acceess
-        const int PROCESS_WM_READ = 0x38;
-#if _WINDOWS
-        const int PROCESS_SUSPEND_RESUME = 0x0800;
         const long GUEST_MEMORY_HOST_BASE = 0x300000000;
         const int CAMERA_DATA_SIZE = 0x20;
         const int MOBY_TABLE_DATA_SIZE = 0x0C;
         const int MOBY_DATA_SIZE = 0x100;
-#endif
 
-#if _WINDOWS
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-
-        [DllImport("kernel32.dll")]
-        private static extern bool ReadProcessMemory(IntPtr hProcess, Int64 lpBaseAddress, byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
-
-        [DllImport("kernel32.dll")]
-        private static extern bool WriteProcessMemory(IntPtr hProcess, Int64 lpBaseAddress, byte[] lpBuffer, int nSize, ref int lpNumberOfBytesWritten);
-
-        [DllImport("ntdll.dll")]
-        private static extern int NtSuspendProcess(IntPtr processHandle);
-
-        [DllImport("ntdll.dll")]
-        private static extern int NtResumeProcess(IntPtr processHandle);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(IntPtr hObject);
-#endif
-
-        private readonly Process? PROCESS;
-        private readonly IntPtr PROCESS_HANDLE;
+        private readonly IProcessMemory? PROCESS_MEMORY;
         private readonly MemoryAddresses? ADDRESSES;
 
-#if _WINDOWS
         private sealed class MemorySnapshot
         {
             public readonly byte[] cameraData;
@@ -85,14 +55,12 @@ namespace Replanetizer.MemoryHook
         private MemorySnapshot? SNAPSHOT;
         private Thread? SNAPSHOT_THREAD;
         private volatile bool STOP_SNAPSHOT_THREAD;
-#endif
 
         public bool hookWorking { get; private set; } = false;
         private string errorMessage = "";
 
         public MemoryHookHandle(Level level)
         {
-#if _WINDOWS
             switch (level.game.num)
             {
                 case 1:
@@ -125,35 +93,26 @@ namespace Replanetizer.MemoryHook
                     return;
             }
 
-            Process[] processList = Process.GetProcessesByName("rpcs3");
-            if (processList.Length > 0)
+            PROCESS_MEMORY = ProcessMemoryFactory.Create();
+            if (PROCESS_MEMORY.IsAvailable)
             {
-                PROCESS = processList[0];
-                PROCESS_HANDLE = OpenProcess(PROCESS_WM_READ | PROCESS_SUSPEND_RESUME, false, PROCESS.Id);
-
                 hookWorking = true;
-                errorMessage = "Success!";
+                errorMessage = PROCESS_MEMORY.ErrorMessage;
             }
             else
             {
                 hookWorking = false;
-                errorMessage = "Failed to find a running RPCS3 process.";
+                errorMessage = PROCESS_MEMORY.ErrorMessage;
+                return;
             }
 
-            if (hookWorking)
+            level.EmplaceCommonData();
+            SNAPSHOT_THREAD = new Thread(SnapshotLoop)
             {
-                level.EmplaceCommonData();
-                SNAPSHOT_THREAD = new Thread(SnapshotLoop)
-                {
-                    IsBackground = true,
-                    Name = "RPCS3 memory snapshot"
-                };
-                SNAPSHOT_THREAD.Start();
-            }
-#else
-            hookWorking = false;
-            errorMessage = "Memory hooks are only supported for Windows.";
-#endif
+                IsBackground = true,
+                Name = "RPCS3 memory snapshot"
+            };
+            SNAPSHOT_THREAD.Start();
         }
 
         public string GetLastErrorMessage()
@@ -163,7 +122,6 @@ namespace Replanetizer.MemoryHook
 
         public void UpdateCamera(Camera camera)
         {
-#if _WINDOWS
             if (!hookWorking) return;
             if (ADDRESSES == null) return;
             if (ADDRESSES.camera == 0) return;
@@ -180,12 +138,10 @@ namespace Replanetizer.MemoryHook
                     ReadFloat(SNAPSHOT.cameraData, 0x10),
                     ReadFloat(SNAPSHOT.cameraData, 0x18) - (float) (Math.PI / 2));
             }
-#endif
         }
 
         public void UpdateMobys(List<Moby> levelMobs, List<Model> models, LevelFrame frame, GameType game)
         {
-#if _WINDOWS
             if (!hookWorking) return;
             if (ADDRESSES == null) return;
             if (ADDRESSES.moby == 0) return;
@@ -216,12 +172,10 @@ namespace Replanetizer.MemoryHook
                     levelMobs[i].UpdateFromMemory(SNAPSHOT.mobyData, i * MOBY_DATA_SIZE, models);
                 }
             }
-#endif
         }
 
         public int GetLevelFrameNumber()
         {
-#if _WINDOWS
             if (!hookWorking) return -1;
             if (ADDRESSES == null) return -1;
             if (ADDRESSES.levelFrames == 0) return -1;
@@ -230,12 +184,8 @@ namespace Replanetizer.MemoryHook
             {
                 return SNAPSHOT?.frameNumber ?? -1;
             }
-#else
-            return -1;
-#endif
         }
 
-#if _WINDOWS
         private void SnapshotLoop()
         {
             while (!STOP_SNAPSHOT_THREAD)
@@ -264,7 +214,7 @@ namespace Replanetizer.MemoryHook
             bool processSuspended = false;
             if (hasFrameCounter)
             {
-                if (NtSuspendProcess(PROCESS_HANDLE) < 0) return;
+                if (PROCESS_MEMORY == null || !PROCESS_MEMORY.Suspend()) return;
                 processSuspended = true;
             }
 
@@ -302,25 +252,22 @@ namespace Replanetizer.MemoryHook
             {
                 if (processSuspended)
                 {
-                    NtResumeProcess(PROCESS_HANDLE);
+                    PROCESS_MEMORY?.Resume();
                 }
             }
         }
 
         private bool ReadProcessBytes(long address, byte[] buffer)
         {
-            int bytesRead = 0;
-            bool readSucceeded = ReadProcessMemory(PROCESS_HANDLE, address, buffer, buffer.Length, ref bytesRead);
-            return readSucceeded && bytesRead == buffer.Length;
+            return PROCESS_MEMORY?.Read(address, buffer) ?? false;
         }
 
         private bool ReadProcessInt(long address, out int value)
         {
             byte[] buffer = new byte[sizeof(int)];
-            int bytesRead = 0;
-            bool readSucceeded = ReadProcessMemory(PROCESS_HANDLE, address, buffer, buffer.Length, ref bytesRead);
-            value = readSucceeded && bytesRead == buffer.Length ? ReadInt(buffer, 0) : -1;
-            return readSucceeded && bytesRead == buffer.Length;
+            bool readSucceeded = ReadProcessBytes(address, buffer);
+            value = readSucceeded ? ReadInt(buffer, 0) : -1;
+            return readSucceeded;
         }
 
         private bool TryGetMobyRange(uint firstMoby, uint lastMoby, out int mobyCount, out int mobyDataSize)
@@ -340,7 +287,6 @@ namespace Replanetizer.MemoryHook
             mobyDataSize = (int) mobyDataSizeValue;
             return true;
         }
-#endif
 
         private bool IsX64()
         {
@@ -375,15 +321,9 @@ namespace Replanetizer.MemoryHook
 
         public void Dispose()
         {
-#if _WINDOWS
             STOP_SNAPSHOT_THREAD = true;
             SNAPSHOT_THREAD?.Join();
-            if (PROCESS_HANDLE != IntPtr.Zero)
-            {
-                CloseHandle(PROCESS_HANDLE);
-            }
-#endif
-            PROCESS?.Dispose();
+            PROCESS_MEMORY?.Dispose();
         }
     }
 }
