@@ -30,37 +30,38 @@ namespace Replanetizer.MemoryHook
 
         private sealed class MemorySnapshot
         {
-            public readonly byte[] cameraData;
-            public readonly byte[] mobyTableData;
-            public readonly byte[] mobyData;
-            public readonly int mobyCount;
-            public readonly int frameNumber;
-
-            public MemorySnapshot(
-                byte[] cameraData,
-                byte[] mobyTableData,
-                byte[] mobyData,
-                int mobyCount,
-                int frameNumber)
-            {
-                this.cameraData = cameraData;
-                this.mobyTableData = mobyTableData;
-                this.mobyData = mobyData;
-                this.mobyCount = mobyCount;
-                this.frameNumber = frameNumber;
-            }
+            public readonly object WRITE_LOCK = new object();
+            public readonly Camera camera = new Camera();
+            public readonly List<Moby.IngameMobyMemory> mobyMemory =
+                new List<Moby.IngameMobyMemory>();
+            public int mobyCount;
+            public int frameNumber;
+            public int readerCount;
         }
 
-        private readonly object SNAPSHOT_LOCK = new object();
-        private MemorySnapshot? SNAPSHOT;
+        private const int SNAPSHOT_COUNT = 3;
+        private readonly MemorySnapshot[] SNAPSHOTS =
+        {
+            new MemorySnapshot(),
+            new MemorySnapshot(),
+            new MemorySnapshot()
+        };
+        private int PUBLISHED_SNAPSHOT_INDEX = -1;
+        private int PREVIOUS_SNAPSHOT_INDEX = -1;
+        private readonly byte[] CAMERA_DATA_BUFFER = new byte[CAMERA_DATA_SIZE];
+        private readonly byte[] MOBY_TABLE_DATA_BUFFER = new byte[MOBY_TABLE_DATA_SIZE];
+        private readonly byte[] FRAME_DATA_BUFFER = new byte[sizeof(int)];
+        private byte[] MOBY_DATA_BUFFER = Array.Empty<byte>();
         private Thread? SNAPSHOT_THREAD;
         private volatile bool STOP_SNAPSHOT_THREAD;
+        private readonly GameType GAME;
 
         public bool hookWorking { get; private set; } = false;
         private string errorMessage = "";
 
         public MemoryHookHandle(Level level)
         {
+            GAME = level.game;
             switch (level.game.num)
             {
                 case 1:
@@ -125,18 +126,15 @@ namespace Replanetizer.MemoryHook
             if (!hookWorking) return;
             if (ADDRESSES == null) return;
             if (ADDRESSES.camera == 0) return;
-            lock (SNAPSHOT_LOCK)
+            if (!TryAcquireCurrentSnapshot(out MemorySnapshot snapshot)) return;
+            try
             {
-                if (SNAPSHOT == null) return;
-
-                camera.position = new Vector3(
-                    ReadFloat(SNAPSHOT.cameraData, 0x00),
-                    ReadFloat(SNAPSHOT.cameraData, 0x04),
-                    ReadFloat(SNAPSHOT.cameraData, 0x08));
-                camera.rotation = new Vector3(
-                    -ReadFloat(SNAPSHOT.cameraData, 0x14),
-                    ReadFloat(SNAPSHOT.cameraData, 0x10),
-                    ReadFloat(SNAPSHOT.cameraData, 0x18) - (float) (Math.PI / 2));
+                camera.position = snapshot.camera.position;
+                camera.rotation = snapshot.camera.rotation;
+            }
+            finally
+            {
+                ReleaseSnapshot(snapshot);
             }
         }
 
@@ -147,11 +145,10 @@ namespace Replanetizer.MemoryHook
             if (ADDRESSES.moby == 0) return;
             if (!IsX64()) return;
 
-            lock (SNAPSHOT_LOCK)
+            if (!TryAcquireCurrentSnapshot(out MemorySnapshot snapshot)) return;
+            try
             {
-                if (SNAPSHOT == null) return;
-
-                int numMobs = SNAPSHOT.mobyCount;
+                int numMobs = snapshot.mobyCount;
                 while (levelMobs.Count < numMobs)
                 {
                     Moby mob = new Moby(game);
@@ -169,8 +166,12 @@ namespace Replanetizer.MemoryHook
 
                 for (int i = 0; i < numMobs; i++)
                 {
-                    levelMobs[i].UpdateFromMemory(SNAPSHOT.mobyData, i * MOBY_DATA_SIZE, models);
+                    levelMobs[i].ApplyMemory(snapshot.mobyMemory[i], models);
                 }
+            }
+            finally
+            {
+                ReleaseSnapshot(snapshot);
             }
         }
 
@@ -180,10 +181,43 @@ namespace Replanetizer.MemoryHook
             if (ADDRESSES == null) return -1;
             if (ADDRESSES.levelFrames == 0) return -1;
 
-            lock (SNAPSHOT_LOCK)
+            if (!TryAcquireCurrentSnapshot(out MemorySnapshot snapshot)) return -1;
+            try
             {
-                return SNAPSHOT?.frameNumber ?? -1;
+                return snapshot.frameNumber;
             }
+            finally
+            {
+                ReleaseSnapshot(snapshot);
+            }
+        }
+
+        private bool TryAcquireCurrentSnapshot(out MemorySnapshot snapshot)
+        {
+            while (true)
+            {
+                int index = Volatile.Read(ref PUBLISHED_SNAPSHOT_INDEX);
+                if (index < 0)
+                {
+                    snapshot = null!;
+                    return false;
+                }
+
+                MemorySnapshot candidate = SNAPSHOTS[index];
+                Interlocked.Increment(ref candidate.readerCount);
+                if (index == Volatile.Read(ref PUBLISHED_SNAPSHOT_INDEX))
+                {
+                    snapshot = candidate;
+                    return true;
+                }
+
+                Interlocked.Decrement(ref candidate.readerCount);
+            }
+        }
+
+        private static void ReleaseSnapshot(MemorySnapshot snapshot)
+        {
+            Interlocked.Decrement(ref snapshot.readerCount);
         }
 
         private void SnapshotLoop()
@@ -205,48 +239,142 @@ namespace Replanetizer.MemoryHook
             {
                 if (!ReadProcessInt(ADDRESSES.levelFrames, out frameBefore)) return;
 
-                lock (SNAPSHOT_LOCK)
-                {
-                    if (SNAPSHOT?.frameNumber == frameBefore) return;
-                }
+                if (IsCurrentFrame(frameBefore)) return;
             }
+
+            if (!TryGetWritableSnapshot(
+                out int snapshotIndex,
+                out MemorySnapshot snapshot))
+            {
+                return;
+            }
+
+            bool captureSucceeded;
+            try
+            {
+                captureSucceeded = CaptureIntoSnapshot(snapshot, hasFrameCounter, frameBefore);
+            }
+            finally
+            {
+                Monitor.Exit(snapshot.WRITE_LOCK);
+            }
+
+            if (captureSucceeded)
+            {
+                int previousIndex = Volatile.Read(ref PUBLISHED_SNAPSHOT_INDEX);
+                Volatile.Write(ref PREVIOUS_SNAPSHOT_INDEX, previousIndex);
+                Volatile.Write(ref PUBLISHED_SNAPSHOT_INDEX, snapshotIndex);
+            }
+        }
+
+        private bool IsCurrentFrame(int frameNumber)
+        {
+            if (!TryAcquireCurrentSnapshot(out MemorySnapshot snapshot)) return false;
+            try
+            {
+                return snapshot.frameNumber == frameNumber;
+            }
+            finally
+            {
+                ReleaseSnapshot(snapshot);
+            }
+        }
+
+        private bool TryGetWritableSnapshot(
+            out int snapshotIndex,
+            out MemorySnapshot snapshot)
+        {
+            int publishedIndex = Volatile.Read(ref PUBLISHED_SNAPSHOT_INDEX);
+            for (int i = 0; i < SNAPSHOT_COUNT; i++)
+            {
+                if (i == publishedIndex) continue;
+
+                MemorySnapshot candidate = SNAPSHOTS[i];
+                if (Volatile.Read(ref candidate.readerCount) != 0) continue;
+
+                Monitor.Enter(candidate.WRITE_LOCK);
+                if (i != Volatile.Read(ref PUBLISHED_SNAPSHOT_INDEX) &&
+                    Volatile.Read(ref candidate.readerCount) == 0)
+                {
+                    snapshotIndex = i;
+                    snapshot = candidate;
+                    return true;
+                }
+
+                Monitor.Exit(candidate.WRITE_LOCK);
+            }
+
+            snapshotIndex = -1;
+            snapshot = null!;
+            return false;
+        }
+
+        private bool CaptureIntoSnapshot(
+            MemorySnapshot snapshot,
+            bool hasFrameCounter,
+            int frameBefore)
+        {
+            if (ADDRESSES == null) return false;
 
             bool processSuspended = false;
             if (hasFrameCounter)
             {
-                if (PROCESS_MEMORY == null || !PROCESS_MEMORY.Suspend()) return;
+                if (PROCESS_MEMORY == null || !PROCESS_MEMORY.Suspend()) return false;
                 processSuspended = true;
             }
 
             try
             {
-                byte[] cameraData = new byte[CAMERA_DATA_SIZE];
-                byte[] mobyTableData = new byte[MOBY_TABLE_DATA_SIZE];
-                if (!ReadProcessBytes(ADDRESSES.camera, cameraData)) return;
-                if (!ReadProcessBytes(ADDRESSES.moby, mobyTableData)) return;
+                if (!ReadProcessBytes(ADDRESSES.camera, CAMERA_DATA_BUFFER)) return false;
+                if (!ReadProcessBytes(ADDRESSES.moby, MOBY_TABLE_DATA_BUFFER)) return false;
 
-                uint firstMoby = ReadUint(mobyTableData, 0x00);
-                uint lastMoby = ReadUint(mobyTableData, 0x08);
-                if (!TryGetMobyRange(firstMoby, lastMoby, out int mobyCount, out int mobyDataSize)) return;
+                uint firstMoby = ReadUint(MOBY_TABLE_DATA_BUFFER, 0x00);
+                uint lastMoby = ReadUint(MOBY_TABLE_DATA_BUFFER, 0x08);
+                if (!TryGetMobyRange(firstMoby, lastMoby, out int mobyCount, out int mobyDataSize))
+                {
+                    return false;
+                }
 
-                byte[] mobyData = new byte[mobyDataSize];
+                if (MOBY_DATA_BUFFER.Length != mobyDataSize)
+                {
+                    MOBY_DATA_BUFFER = new byte[mobyDataSize];
+                }
+
                 long mobyAddress = GUEST_MEMORY_HOST_BASE + firstMoby;
-                if (!ReadProcessBytes(mobyAddress, mobyData)) return;
+                if (!ReadProcessBytes(mobyAddress, MOBY_DATA_BUFFER)) return false;
+
+                snapshot.camera.position = new Vector3(
+                    ReadFloat(CAMERA_DATA_BUFFER, 0x00),
+                    ReadFloat(CAMERA_DATA_BUFFER, 0x04),
+                    ReadFloat(CAMERA_DATA_BUFFER, 0x08));
+                snapshot.camera.rotation = new Vector3(
+                    -ReadFloat(CAMERA_DATA_BUFFER, 0x14),
+                    ReadFloat(CAMERA_DATA_BUFFER, 0x10),
+                    ReadFloat(CAMERA_DATA_BUFFER, 0x18) - (float) (Math.PI / 2));
+
+                while (snapshot.mobyMemory.Count < mobyCount)
+                {
+                    snapshot.mobyMemory.Add(new Moby.IngameMobyMemory());
+                }
+
+                for (int i = 0; i < mobyCount; i++)
+                {
+                    snapshot.mobyMemory[i].LoadFromMemory(
+                        GAME,
+                        MOBY_DATA_BUFFER,
+                        i * MOBY_DATA_SIZE,
+                        ReadGuestProcessBytes);
+                }
 
                 int frameAfter = frameBefore;
-                if (hasFrameCounter && !ReadProcessInt(ADDRESSES.levelFrames, out frameAfter)) return;
-
-                MemorySnapshot snapshot = new MemorySnapshot(
-                    cameraData,
-                    mobyTableData,
-                    mobyData,
-                    mobyCount,
-                    frameAfter);
-                lock (SNAPSHOT_LOCK)
+                if (hasFrameCounter && !ReadProcessInt(ADDRESSES.levelFrames, out frameAfter))
                 {
-                    SNAPSHOT = snapshot;
+                    return false;
                 }
-                return;
+
+                snapshot.mobyCount = mobyCount;
+                snapshot.frameNumber = frameAfter;
+                return true;
             }
             finally
             {
@@ -262,11 +390,15 @@ namespace Replanetizer.MemoryHook
             return PROCESS_MEMORY?.Read(address, buffer) ?? false;
         }
 
+        private bool ReadGuestProcessBytes(uint address, byte[] buffer)
+        {
+            return ReadProcessBytes(GUEST_MEMORY_HOST_BASE + address, buffer);
+        }
+
         private bool ReadProcessInt(long address, out int value)
         {
-            byte[] buffer = new byte[sizeof(int)];
-            bool readSucceeded = ReadProcessBytes(address, buffer);
-            value = readSucceeded ? ReadInt(buffer, 0) : -1;
+            bool readSucceeded = ReadProcessBytes(address, FRAME_DATA_BUFFER);
+            value = readSucceeded ? ReadInt(FRAME_DATA_BUFFER, 0) : -1;
             return readSucceeded;
         }
 

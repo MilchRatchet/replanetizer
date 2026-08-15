@@ -7,6 +7,7 @@
 
 using LibReplanetizer.Models;
 using OpenTK.Mathematics;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using SixLabors.ImageSharp;
@@ -711,6 +712,36 @@ namespace LibReplanetizer.LevelObjects
 
         public class IngameMobyMemory
         {
+            public struct AnimationLayer
+            {
+                public ushort unk0x00 { get; set; }
+                public ushort boneCount { get; set; }
+                public uint unk0x04 { get; set; }
+                public float animationBlend { get; set; }
+                public uint unk0x0C { get; set; }
+                public uint pAnimation { get; set; }
+                public uint unk0x14 { get; set; }
+                public uint unk0x18 { get; set; }
+                public uint pNextAnimationLayer { get; set; }
+            }
+
+            public struct AnimationManipulator
+            {
+                public byte animationBone { get; set; }
+                public byte state { get; set; }
+                public byte scaleOn { get; set; }
+                public byte absolute { get; set; }
+                public int boneID { get; set; }
+                public uint pNext { get; set; }
+                public float animationBlend { get; set; }
+                public Vector4 rotation { get; set; }
+                public Vector4 scale { get; set; }
+                public Vector4 translation { get; set; }
+            }
+
+            private const int ANIMATION_LAYER_SIZE = 0x20;
+            private const int ANIMATION_MANIPULATOR_SIZE = 0x40;
+
             public Vector4 collPos { get; set; }
             public Vector4 position { get; set; }
             public byte state { get; set; }
@@ -736,6 +767,7 @@ namespace LibReplanetizer.LevelObjects
             public float unk58 { get; set; }
             public float frameSpeed { get; set; }
             public uint pAnimationLayers { get; set; }
+            public uint pManipulators { get; set; }
             public uint pPreviousAnimationData { get; set; }
             public uint pCurrentAnimationData { get; set; }
             public uint pUpdate { get; set; }
@@ -751,6 +783,12 @@ namespace LibReplanetizer.LevelObjects
             public ushort oClass { get; set; }
             public ushort UID { get; set; }
             public Matrix3x4 transformation { get; set; }
+            public List<AnimationLayer> animationLayers { get; } = new List<AnimationLayer>();
+            public List<AnimationManipulator> manipulators { get; } = new List<AnimationManipulator>();
+
+            private readonly byte[] animationLayerBuffer = new byte[ANIMATION_LAYER_SIZE];
+            private readonly byte[] manipulatorBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
+            private readonly HashSet<uint> visitedAddresses = new HashSet<uint>();
 
             public IngameMobyMemory()
             {
@@ -765,6 +803,153 @@ namespace LibReplanetizer.LevelObjects
             public void SetDead()
             {
                 state = 0xFE;
+            }
+
+            public void LoadFromMemory(
+                GameType game,
+                byte[] memory,
+                int offset,
+                Func<uint, byte[], bool>? readMemory = null)
+            {
+                switch (game.num)
+                {
+                    case 1:
+                        UpdateRC1(memory, offset);
+                        break;
+                    case 2:
+                    case 3:
+                        UpdateRC23(memory, offset);
+                        break;
+                    default:
+                        animationLayers.Clear();
+                        manipulators.Clear();
+                        return;
+                }
+
+                animationLayers.Clear();
+                manipulators.Clear();
+                if (readMemory != null)
+                {
+                    LoadAnimationData(readMemory);
+                }
+            }
+
+            public void CopyFrom(IngameMobyMemory source)
+            {
+                collPos = source.collPos;
+                position = source.position;
+                state = source.state;
+                group = source.group;
+                mClass = source.mClass;
+                alpha = source.alpha;
+                pClass = source.pClass;
+                pChain = source.pChain;
+                scale = source.scale;
+                updateDistance = source.updateDistance;
+                visible = source.visible;
+                drawDistance = source.drawDistance;
+                modeBits = source.modeBits;
+                unk36 = source.unk36;
+                color = source.color;
+                light = source.light;
+                rotation = source.rotation;
+                previousAnimationFrame = source.previousAnimationFrame;
+                animationFrame = source.animationFrame;
+                previousAnimationID = source.previousAnimationID;
+                animationID = source.animationID;
+                animationBlend = source.animationBlend;
+                unk58 = source.unk58;
+                frameSpeed = source.frameSpeed;
+                pAnimationLayers = source.pAnimationLayers;
+                pManipulators = source.pManipulators;
+                pPreviousAnimationData = source.pPreviousAnimationData;
+                pCurrentAnimationData = source.pCurrentAnimationData;
+                pUpdate = source.pUpdate;
+                pVars = source.pVars;
+                unk7C = source.unk7C;
+                unk7D = source.unk7D;
+                unk7E = source.unk7E;
+                shadow = source.shadow;
+                unk80 = source.unk80;
+                unk84 = source.unk84;
+                unk88 = source.unk88;
+                collCount = source.collCount;
+                oClass = source.oClass;
+                UID = source.UID;
+                transformation = source.transformation;
+
+                animationLayers.Clear();
+                animationLayers.AddRange(source.animationLayers);
+                manipulators.Clear();
+                manipulators.AddRange(source.manipulators);
+            }
+
+            private void LoadAnimationLayers(Func<uint, byte[], bool> readMemory)
+            {
+                visitedAddresses.Clear();
+                uint address = pAnimationLayers;
+
+                while (address != 0 && visitedAddresses.Add(address))
+                {
+                    if (!readMemory(address, animationLayerBuffer)) break;
+
+                    animationLayers.Add(new AnimationLayer
+                    {
+                        unk0x00 = ReadUshort(animationLayerBuffer, 0x00),
+                        boneCount = ReadUshort(animationLayerBuffer, 0x02),
+                        unk0x04 = ReadUint(animationLayerBuffer, 0x04),
+                        animationBlend = ReadFloat(animationLayerBuffer, 0x08),
+                        unk0x0C = ReadUint(animationLayerBuffer, 0x0C),
+                        pAnimation = ReadUint(animationLayerBuffer, 0x10),
+                        unk0x14 = ReadUint(animationLayerBuffer, 0x14),
+                        unk0x18 = ReadUint(animationLayerBuffer, 0x18),
+                        pNextAnimationLayer = ReadUint(animationLayerBuffer, 0x1C)
+                    });
+                    address = ReadUint(animationLayerBuffer, 0x1C);
+                }
+            }
+
+            private void LoadManipulators(Func<uint, byte[], bool> readMemory)
+            {
+                visitedAddresses.Clear();
+                uint address = pManipulators;
+
+                while (address != 0 && visitedAddresses.Add(address))
+                {
+                    if (!readMemory(address, manipulatorBuffer)) break;
+
+                    manipulators.Add(new AnimationManipulator
+                    {
+                        animationBone = manipulatorBuffer[0x00],
+                        state = manipulatorBuffer[0x01],
+                        scaleOn = manipulatorBuffer[0x02],
+                        absolute = manipulatorBuffer[0x03],
+                        boneID = ReadInt(manipulatorBuffer, 0x04),
+                        pNext = ReadUint(manipulatorBuffer, 0x08),
+                        animationBlend = ReadFloat(manipulatorBuffer, 0x0C),
+                        rotation = ReadVector4(manipulatorBuffer, 0x10),
+                        scale = ReadVector4(manipulatorBuffer, 0x20),
+                        translation = ReadVector4(manipulatorBuffer, 0x30)
+                    });
+                    address = ReadUint(manipulatorBuffer, 0x08);
+                }
+            }
+
+            public void LoadAnimationData(Func<uint, byte[], bool> readMemory)
+            {
+                animationLayers.Clear();
+                LoadAnimationLayers(readMemory);
+                manipulators.Clear();
+                LoadManipulators(readMemory);
+            }
+
+            private static Vector4 ReadVector4(byte[] memory, int offset)
+            {
+                return new Vector4(
+                    ReadFloat(memory, offset + 0x00),
+                    ReadFloat(memory, offset + 0x04),
+                    ReadFloat(memory, offset + 0x08),
+                    ReadFloat(memory, offset + 0x0C));
             }
 
             public void UpdateRC1(byte[] memory, int offset)
@@ -812,6 +997,7 @@ namespace LibReplanetizer.LevelObjects
                 frameSpeed = ReadFloat(memory, offset + 0x5C);
 
                 pAnimationLayers = ReadUint(memory, offset + 0x60);
+                pManipulators = ReadUint(memory, offset + 0x64);
                 pPreviousAnimationData = ReadUint(memory, offset + 0x68);
                 pCurrentAnimationData = ReadUint(memory, offset + 0x6C);
 
@@ -902,6 +1088,8 @@ namespace LibReplanetizer.LevelObjects
                 memory = new IngameMobyMemory();
             }
 
+            memory.animationLayers.Clear();
+            memory.manipulators.Clear();
             memory.SetDead();
         }
 
@@ -925,11 +1113,31 @@ namespace LibReplanetizer.LevelObjects
                     return;
             }
 
+            ApplyMemoryState(models);
+        }
+
+        public void ApplyMemory(IngameMobyMemory snapshot, List<Model> models)
+        {
+            if (memory == null)
+            {
+                memory = new IngameMobyMemory();
+            }
+
+            memory.CopyFrom(snapshot);
+            ApplyMemoryState(models);
+        }
+
+        private void ApplyMemoryState(List<Model> models)
+        {
+            if (memory == null) return;
+
             pVarMemoryAddress = 0x300000000 + memory.pVars;
 
             // If dead
             if (memory.IsDead())
             {
+                memory.animationLayers.Clear();
+                memory.manipulators.Clear();
                 model = null;
                 modelID = -1;
                 return;
@@ -942,8 +1150,6 @@ namespace LibReplanetizer.LevelObjects
                 model = mod;
                 modelID = memory.oClass;
             }
-
-            float modelSize = (model != null) ? model.size : 1.0f;
 
             mobyID = memory.UID;
             groupIndex = memory.group;
