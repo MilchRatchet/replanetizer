@@ -723,6 +723,14 @@ namespace LibReplanetizer.LevelObjects
                 public uint unk0x14 { get; set; }
                 public uint unk0x18 { get; set; }
                 public uint pNextAnimationLayer { get; set; }
+                public List<AnimationData> animationData { get; set; }
+            }
+
+            public struct AnimationData
+            {
+                public Vector4 rotation { get; set; }
+                public Vector4 scale { get; set; }
+                public Vector4 translation { get; set; }
             }
 
             public struct AnimationManipulator
@@ -768,8 +776,6 @@ namespace LibReplanetizer.LevelObjects
             public float frameSpeed { get; set; }
             public uint pAnimationLayers { get; set; }
             public uint pManipulators { get; set; }
-            public uint pPreviousAnimationData { get; set; }
-            public uint pCurrentAnimationData { get; set; }
             public uint pUpdate { get; set; }
             public uint pVars { get; set; }
             public byte unk7C { get; set; }
@@ -787,6 +793,7 @@ namespace LibReplanetizer.LevelObjects
             public List<AnimationManipulator> manipulators { get; } = new List<AnimationManipulator>();
 
             private readonly byte[] animationLayerBuffer = new byte[ANIMATION_LAYER_SIZE];
+            private readonly byte[] animationDataBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
             private readonly byte[] manipulatorBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
             private readonly HashSet<uint> visitedAddresses = new HashSet<uint>();
 
@@ -862,8 +869,6 @@ namespace LibReplanetizer.LevelObjects
                 frameSpeed = source.frameSpeed;
                 pAnimationLayers = source.pAnimationLayers;
                 pManipulators = source.pManipulators;
-                pPreviousAnimationData = source.pPreviousAnimationData;
-                pCurrentAnimationData = source.pCurrentAnimationData;
                 pUpdate = source.pUpdate;
                 pVars = source.pVars;
                 unk7C = source.unk7C;
@@ -893,7 +898,7 @@ namespace LibReplanetizer.LevelObjects
                 {
                     if (!readMemory(address, animationLayerBuffer)) break;
 
-                    animationLayers.Add(new AnimationLayer
+                    AnimationLayer layer = new AnimationLayer
                     {
                         unk0x00 = ReadUshort(animationLayerBuffer, 0x00),
                         boneCount = ReadUshort(animationLayerBuffer, 0x02),
@@ -903,9 +908,25 @@ namespace LibReplanetizer.LevelObjects
                         pAnimation = ReadUint(animationLayerBuffer, 0x10),
                         unk0x14 = ReadUint(animationLayerBuffer, 0x14),
                         unk0x18 = ReadUint(animationLayerBuffer, 0x18),
-                        pNextAnimationLayer = ReadUint(animationLayerBuffer, 0x1C)
-                    });
-                    address = ReadUint(animationLayerBuffer, 0x1C);
+                        pNextAnimationLayer = ReadUint(animationLayerBuffer, 0x1C),
+                        animationData = new List<AnimationData>()
+                    };
+
+                    for (int i = 0; i < layer.boneCount; i++)
+                    {
+                        uint animationDataAddress = layer.pAnimation + (uint) (i * ANIMATION_MANIPULATOR_SIZE);
+                        if (!readMemory(animationDataAddress, animationDataBuffer)) break;
+
+                        layer.animationData.Add(new AnimationData
+                        {
+                            rotation = ReadVector4(animationDataBuffer, 0x00),
+                            scale = ReadVector4(animationDataBuffer, 0x10),
+                            translation = ReadVector4(animationDataBuffer, 0x20)
+                        });
+                    }
+
+                    animationLayers.Add(layer);
+                    address = layer.pNextAnimationLayer;
                 }
             }
 
@@ -998,8 +1019,6 @@ namespace LibReplanetizer.LevelObjects
 
                 pAnimationLayers = ReadUint(memory, offset + 0x60);
                 pManipulators = ReadUint(memory, offset + 0x64);
-                pPreviousAnimationData = ReadUint(memory, offset + 0x68);
-                pCurrentAnimationData = ReadUint(memory, offset + 0x6C);
 
                 pUpdate = ReadUint(memory, offset + 0x74);
                 pVars = ReadUint(memory, offset + 0x78);
