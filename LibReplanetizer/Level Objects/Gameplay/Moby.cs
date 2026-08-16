@@ -747,6 +747,32 @@ namespace LibReplanetizer.LevelObjects
                 public Vector4 translation { get; set; }
             }
 
+            public sealed class RuntimeAnimationData
+            {
+                public RuntimeAnimationData(
+                    float speed,
+                    Quaternion[] rotations,
+                    Vector3[] scalings,
+                    bool[] hasScalings,
+                    Vector3[] translations,
+                    bool[] hasTranslations)
+                {
+                    this.speed = speed;
+                    this.rotations = rotations;
+                    this.scalings = scalings;
+                    this.hasScalings = hasScalings;
+                    this.translations = translations;
+                    this.hasTranslations = hasTranslations;
+                }
+
+                public readonly float speed;
+                public readonly Quaternion[] rotations;
+                public readonly Vector3[] scalings;
+                public readonly bool[] hasScalings;
+                public readonly Vector3[] translations;
+                public readonly bool[] hasTranslations;
+            }
+
             private const int ANIMATION_LAYER_SIZE = 0x20;
             private const int ANIMATION_MANIPULATOR_SIZE = 0x40;
 
@@ -769,11 +795,16 @@ namespace LibReplanetizer.LevelObjects
             public Vector4 rotation { get; set; }
             public byte previousAnimationFrame { get; set; }
             public byte animationFrame { get; set; }
+            public byte updateID { get; set; }
             public byte previousAnimationID { get; set; }
             public byte animationID { get; set; }
             public float animationBlend { get; set; }
             public float unk58 { get; set; }
             public float frameSpeed { get; set; }
+            public uint pPreviousAnimationData { get; set; }
+            public uint pCurrentAnimationData { get; set; }
+            public RuntimeAnimationData? previousAnimationData { get; private set; }
+            public RuntimeAnimationData? currentAnimationData { get; private set; }
             public uint pAnimationLayers { get; set; }
             public uint pManipulators { get; set; }
             public uint pUpdate { get; set; }
@@ -795,6 +826,7 @@ namespace LibReplanetizer.LevelObjects
             private readonly byte[] animationLayerBuffer = new byte[ANIMATION_LAYER_SIZE];
             private readonly byte[] animationDataBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
             private readonly byte[] manipulatorBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
+            private readonly byte[] runtimeAnimationHeaderBuffer = new byte[0x10];
             private readonly HashSet<uint> visitedAddresses = new HashSet<uint>();
 
             public IngameMobyMemory()
@@ -837,7 +869,13 @@ namespace LibReplanetizer.LevelObjects
                 manipulators.Clear();
                 if (readMemory != null)
                 {
+                    LoadRuntimeAnimationData(readMemory);
                     LoadAnimationData(readMemory);
+                }
+                else
+                {
+                    previousAnimationData = null;
+                    currentAnimationData = null;
                 }
             }
 
@@ -863,10 +901,15 @@ namespace LibReplanetizer.LevelObjects
                 previousAnimationFrame = source.previousAnimationFrame;
                 animationFrame = source.animationFrame;
                 previousAnimationID = source.previousAnimationID;
+                updateID = source.updateID;
                 animationID = source.animationID;
                 animationBlend = source.animationBlend;
                 unk58 = source.unk58;
                 frameSpeed = source.frameSpeed;
+                pPreviousAnimationData = source.pPreviousAnimationData;
+                pCurrentAnimationData = source.pCurrentAnimationData;
+                previousAnimationData = source.previousAnimationData;
+                currentAnimationData = source.currentAnimationData;
                 pAnimationLayers = source.pAnimationLayers;
                 pManipulators = source.pManipulators;
                 pUpdate = source.pUpdate;
@@ -928,6 +971,95 @@ namespace LibReplanetizer.LevelObjects
                     animationLayers.Add(layer);
                     address = layer.pNextAnimationLayer;
                 }
+            }
+
+            private RuntimeAnimationData? ReadRuntimeAnimationData(
+                Func<uint, byte[], bool> readMemory,
+                uint address)
+            {
+                if (address == 0 || !readMemory(address, runtimeAnimationHeaderBuffer))
+                {
+                    return null;
+                }
+
+                ushort rotationDataOffset = ReadUshort(runtimeAnimationHeaderBuffer, 0x08);
+                ushort scalingCount = ReadUshort(runtimeAnimationHeaderBuffer, 0x0A);
+                ushort translationDataOffset = ReadUshort(runtimeAnimationHeaderBuffer, 0x0C);
+                ushort translationCount = ReadUshort(runtimeAnimationHeaderBuffer, 0x0E);
+                int frameDataSize = 0x10 + ReadUshort(runtimeAnimationHeaderBuffer, 0x06) * 0x10;
+                int rotationCount = rotationDataOffset / 0x08;
+
+                if (rotationDataOffset % 0x08 != 0
+                    || frameDataSize < 0x10
+                    || frameDataSize > 0x10000
+                    || rotationDataOffset > frameDataSize - 0x10
+                    || scalingCount > (frameDataSize - 0x10 - rotationDataOffset) / 0x08
+                    || translationDataOffset > frameDataSize - 0x10
+                    || translationCount > (frameDataSize - 0x10 - translationDataOffset) / 0x08)
+                {
+                    return null;
+                }
+
+                byte[] frameData = new byte[frameDataSize];
+                if (!readMemory(address, frameData))
+                {
+                    return null;
+                }
+
+                Quaternion[] rotations = new Quaternion[rotationCount];
+                for (int i = 0; i < rotationCount; i++)
+                {
+                    int offset = 0x10 + i * 0x08;
+                    rotations[i] = new Quaternion(
+                        ReadShort(frameData, offset + 0x00) / 32768.0f,
+                        ReadShort(frameData, offset + 0x02) / 32768.0f,
+                        ReadShort(frameData, offset + 0x04) / 32768.0f,
+                        -ReadShort(frameData, offset + 0x06) / 32768.0f);
+                }
+
+                Vector3[] scalings = new Vector3[rotationCount];
+                bool[] hasScalings = new bool[rotationCount];
+                for (int i = 0; i < scalingCount; i++)
+                {
+                    int offset = 0x10 + rotationDataOffset + i * 0x08;
+                    int bone = frameData[offset + 0x06];
+                    if (bone >= scalings.Length) continue;
+
+                    scalings[bone] += new Vector3(
+                        ReadShort(frameData, offset + 0x00) / 4096.0f,
+                        ReadShort(frameData, offset + 0x02) / 4096.0f,
+                        ReadShort(frameData, offset + 0x04) / 4096.0f);
+                    hasScalings[bone] = true;
+                }
+
+                Vector3[] translations = new Vector3[rotationCount];
+                bool[] hasTranslations = new bool[rotationCount];
+                for (int i = 0; i < translationCount; i++)
+                {
+                    int offset = 0x10 + translationDataOffset + i * 0x08;
+                    int bone = frameData[offset + 0x06];
+                    if (bone >= translations.Length) continue;
+
+                    translations[bone] += new Vector3(
+                        ReadShort(frameData, offset + 0x00) / 1024.0f,
+                        ReadShort(frameData, offset + 0x02) / 1024.0f,
+                        ReadShort(frameData, offset + 0x04) / 1024.0f);
+                    hasTranslations[bone] = true;
+                }
+
+                return new RuntimeAnimationData(
+                    ReadFloat(frameData, 0x00),
+                    rotations,
+                    scalings,
+                    hasScalings,
+                    translations,
+                    hasTranslations);
+            }
+
+            private void LoadRuntimeAnimationData(Func<uint, byte[], bool> readMemory)
+            {
+                previousAnimationData = ReadRuntimeAnimationData(readMemory, pPreviousAnimationData);
+                currentAnimationData = ReadRuntimeAnimationData(readMemory, pCurrentAnimationData);
             }
 
             private void LoadManipulators(Func<uint, byte[], bool> readMemory)
@@ -1011,11 +1143,14 @@ namespace LibReplanetizer.LevelObjects
 
                 previousAnimationFrame = memory[offset + 0x50];
                 animationFrame = memory[offset + 0x51];
-                previousAnimationID = memory[offset + 0x52];
+                updateID = memory[offset + 0x52];
                 animationID = memory[offset + 0x53];
+                previousAnimationID = memory[offset + 0xA5];
                 animationBlend = ReadFloat(memory, offset + 0x54);
                 unk58 = ReadFloat(memory, offset + 0x58);
                 frameSpeed = ReadFloat(memory, offset + 0x5C);
+                pPreviousAnimationData = ReadUint(memory, offset + 0x68);
+                pCurrentAnimationData = ReadUint(memory, offset + 0x6C);
 
                 pAnimationLayers = ReadUint(memory, offset + 0x60);
                 pManipulators = ReadUint(memory, offset + 0x64);
@@ -1075,11 +1210,14 @@ namespace LibReplanetizer.LevelObjects
 
                 previousAnimationFrame = memory[offset + 0x40];
                 animationFrame = memory[offset + 0x41];
-                previousAnimationID = memory[offset + 0x42];
+                updateID = memory[offset + 0x42];
                 animationID = memory[offset + 0x43];
+                previousAnimationID = memory[offset + 0xA9];
                 animationBlend = ReadFloat(memory, offset + 0x44);
                 unk58 = ReadFloat(memory, offset + 0x48);
                 frameSpeed = ReadFloat(memory, offset + 0x4C);
+                pPreviousAnimationData = ReadUint(memory, offset + 0x58);
+                pCurrentAnimationData = ReadUint(memory, offset + 0x5C);
 
                 collCount = ReadUint(memory, offset + 0xA0);
                 oClass = ReadUshort(memory, offset + 0xAA);
