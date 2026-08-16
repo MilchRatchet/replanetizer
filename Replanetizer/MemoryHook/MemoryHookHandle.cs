@@ -55,6 +55,7 @@ namespace Replanetizer.MemoryHook
         private Thread? SNAPSHOT_THREAD;
         private volatile bool STOP_SNAPSHOT_THREAD;
         private readonly GameType GAME;
+        private IFrameWatchpoint? FRAME_WATCHPOINT;
 
         public bool hookWorking { get; private set; } = false;
         private string errorMessage = "";
@@ -99,6 +100,25 @@ namespace Replanetizer.MemoryHook
             {
                 hookWorking = true;
                 errorMessage = PROCESS_MEMORY.ErrorMessage;
+
+#if _WINDOWS
+                if (level.game.num == 1 && PROCESS_MEMORY is WindowsProcessMemory windowsProcessMemory)
+                {
+                    IFrameWatchpoint frameWatchpoint = new WindowsFrameWatchpoint(
+                        windowsProcessMemory.ProcessId,
+                        ADDRESSES?.levelFrames ?? 0);
+                    if (frameWatchpoint.IsAvailable)
+                    {
+                        FRAME_WATCHPOINT = frameWatchpoint;
+                        errorMessage = frameWatchpoint.ErrorMessage;
+                    }
+                    else
+                    {
+                        errorMessage = $"{frameWatchpoint.ErrorMessage} Falling back to suspended snapshots.";
+                        frameWatchpoint.Dispose();
+                    }
+                }
+#endif
             }
             else
             {
@@ -222,20 +242,65 @@ namespace Replanetizer.MemoryHook
 
         private void SnapshotLoop()
         {
-            while (!STOP_SNAPSHOT_THREAD)
+            try
             {
-                CaptureSnapshot();
-                Thread.Sleep(1);
+                while (!STOP_SNAPSHOT_THREAD)
+                {
+                    bool frameWatchpointStopped = false;
+                    if (FRAME_WATCHPOINT != null && ADDRESSES?.levelFrames != 0)
+                    {
+                        if (!FRAME_WATCHPOINT.WaitForWrite())
+                        {
+                            if (STOP_SNAPSHOT_THREAD) break;
+
+                            errorMessage = FRAME_WATCHPOINT.ErrorMessage;
+                            FRAME_WATCHPOINT.Dispose();
+                            FRAME_WATCHPOINT = null;
+                            continue;
+                        }
+                        frameWatchpointStopped = true;
+                    }
+
+                    try
+                    {
+                        CaptureSnapshot(frameWatchpointStopped);
+                    }
+                    finally
+                    {
+                        if (frameWatchpointStopped)
+                        {
+                            if (FRAME_WATCHPOINT != null && !FRAME_WATCHPOINT.RearmAfterWrite())
+                            {
+                                errorMessage = FRAME_WATCHPOINT.ErrorMessage;
+                                FRAME_WATCHPOINT.Dispose();
+                                FRAME_WATCHPOINT = null;
+                            }
+                        }
+                    }
+
+                    if (!frameWatchpointStopped)
+                    {
+                        Thread.SpinWait(32);
+                    }
+                }
+            }
+            finally
+            {
+                if (FRAME_WATCHPOINT != null)
+                {
+                    FRAME_WATCHPOINT.Dispose();
+                    FRAME_WATCHPOINT = null;
+                }
             }
         }
 
-        private void CaptureSnapshot()
+        private void CaptureSnapshot(bool processStopped)
         {
             if (ADDRESSES == null) return;
 
             bool hasFrameCounter = ADDRESSES.levelFrames != 0;
             int frameBefore = -1;
-            if (hasFrameCounter)
+            if (hasFrameCounter && !processStopped)
             {
                 if (!ReadProcessInt(ADDRESSES.levelFrames, out frameBefore)) return;
 
@@ -252,7 +317,11 @@ namespace Replanetizer.MemoryHook
             bool captureSucceeded;
             try
             {
-                captureSucceeded = CaptureIntoSnapshot(snapshot, hasFrameCounter, frameBefore);
+                captureSucceeded = CaptureIntoSnapshot(
+                    snapshot,
+                    hasFrameCounter,
+                    frameBefore,
+                    processStopped);
             }
             finally
             {
@@ -312,12 +381,13 @@ namespace Replanetizer.MemoryHook
         private bool CaptureIntoSnapshot(
             MemorySnapshot snapshot,
             bool hasFrameCounter,
-            int frameBefore)
+            int frameBefore,
+            bool processStopped)
         {
             if (ADDRESSES == null) return false;
 
             bool processSuspended = false;
-            if (hasFrameCounter)
+            if (!processStopped)
             {
                 if (PROCESS_MEMORY == null || !PROCESS_MEMORY.Suspend()) return false;
                 processSuspended = true;
@@ -454,6 +524,7 @@ namespace Replanetizer.MemoryHook
         public void Dispose()
         {
             STOP_SNAPSHOT_THREAD = true;
+            FRAME_WATCHPOINT?.RequestStop();
             SNAPSHOT_THREAD?.Join();
             PROCESS_MEMORY?.Dispose();
         }

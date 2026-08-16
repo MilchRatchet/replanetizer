@@ -15,6 +15,7 @@ namespace Replanetizer.MemoryHook
 
         public bool IsAvailable { get; }
         public string ErrorMessage { get; }
+        internal int ProcessId => process?.Id ?? 0;
 
         public WindowsProcessMemory()
         {

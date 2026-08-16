@@ -11,4 +11,14 @@ namespace Replanetizer.MemoryHook
         bool Suspend();
         bool Resume();
     }
+
+    internal interface IFrameWatchpoint : IDisposable
+    {
+        bool IsAvailable { get; }
+        string ErrorMessage { get; }
+
+        bool WaitForWrite();
+        bool RearmAfterWrite();
+        void RequestStop();
+    }
 }
