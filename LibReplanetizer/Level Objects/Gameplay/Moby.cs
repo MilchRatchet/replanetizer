@@ -774,6 +774,7 @@ namespace LibReplanetizer.LevelObjects
             }
 
             private const int ANIMATION_LAYER_SIZE = 0x20;
+            private const int ANIMATION_DATA_SIZE = 0x30;
             private const int ANIMATION_MANIPULATOR_SIZE = 0x40;
 
             public Vector4 collPos { get; set; }
@@ -824,7 +825,7 @@ namespace LibReplanetizer.LevelObjects
             public List<AnimationManipulator> manipulators { get; } = new List<AnimationManipulator>();
 
             private readonly byte[] animationLayerBuffer = new byte[ANIMATION_LAYER_SIZE];
-            private readonly byte[] animationDataBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
+            private readonly byte[] animationDataBuffer = new byte[ANIMATION_DATA_SIZE];
             private readonly byte[] manipulatorBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
             private readonly byte[] runtimeAnimationHeaderBuffer = new byte[0x10];
             private readonly HashSet<uint> visitedAddresses = new HashSet<uint>();
@@ -957,7 +958,7 @@ namespace LibReplanetizer.LevelObjects
 
                     for (int i = 0; i < layer.boneCount; i++)
                     {
-                        uint animationDataAddress = layer.pAnimation + (uint) (i * ANIMATION_MANIPULATOR_SIZE);
+                        uint animationDataAddress = layer.pAnimation + (uint) (i * ANIMATION_DATA_SIZE);
                         if (!readMemory(animationDataAddress, animationDataBuffer)) break;
 
                         layer.animationData.Add(new AnimationData
