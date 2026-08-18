@@ -765,12 +765,22 @@ namespace LibReplanetizer.LevelObjects
                     this.hasTranslations = hasTranslations;
                 }
 
-                public readonly float speed;
+                public float speed { get; internal set; }
                 public readonly Quaternion[] rotations;
                 public readonly Vector3[] scalings;
                 public readonly bool[] hasScalings;
                 public readonly Vector3[] translations;
                 public readonly bool[] hasTranslations;
+
+                internal void CopyFrom(RuntimeAnimationData source)
+                {
+                    speed = source.speed;
+                    Array.Copy(source.rotations, rotations, rotations.Length);
+                    Array.Copy(source.scalings, scalings, scalings.Length);
+                    Array.Copy(source.hasScalings, hasScalings, hasScalings.Length);
+                    Array.Copy(source.translations, translations, translations.Length);
+                    Array.Copy(source.hasTranslations, hasTranslations, hasTranslations.Length);
+                }
             }
 
             private const int ANIMATION_LAYER_SIZE = 0x20;
@@ -829,6 +839,9 @@ namespace LibReplanetizer.LevelObjects
             private readonly byte[] manipulatorBuffer = new byte[ANIMATION_MANIPULATOR_SIZE];
             private readonly byte[] runtimeAnimationHeaderBuffer = new byte[0x10];
             private readonly HashSet<uint> visitedAddresses = new HashSet<uint>();
+            private byte[] runtimeAnimationDataBuffer = Array.Empty<byte>();
+            private RuntimeAnimationData? previousAnimationDataStorage;
+            private RuntimeAnimationData? currentAnimationDataStorage;
 
             public IngameMobyMemory()
             {
@@ -866,8 +879,6 @@ namespace LibReplanetizer.LevelObjects
                         return;
                 }
 
-                animationLayers.Clear();
-                manipulators.Clear();
                 if (readMemory != null)
                 {
                     LoadRuntimeAnimationData(readMemory);
@@ -877,6 +888,8 @@ namespace LibReplanetizer.LevelObjects
                 {
                     previousAnimationData = null;
                     currentAnimationData = null;
+                    animationLayers.Clear();
+                    manipulators.Clear();
                 }
             }
 
@@ -909,8 +922,14 @@ namespace LibReplanetizer.LevelObjects
                 frameSpeed = source.frameSpeed;
                 pPreviousAnimationData = source.pPreviousAnimationData;
                 pCurrentAnimationData = source.pCurrentAnimationData;
-                previousAnimationData = source.previousAnimationData;
-                currentAnimationData = source.currentAnimationData;
+                previousAnimationData = CopyRuntimeAnimationData(
+                    source.previousAnimationData,
+                    previousAnimationDataStorage);
+                previousAnimationDataStorage = previousAnimationData ?? previousAnimationDataStorage;
+                currentAnimationData = CopyRuntimeAnimationData(
+                    source.currentAnimationData,
+                    currentAnimationDataStorage);
+                currentAnimationDataStorage = currentAnimationData ?? currentAnimationDataStorage;
                 pAnimationLayers = source.pAnimationLayers;
                 pManipulators = source.pManipulators;
                 pUpdate = source.pUpdate;
@@ -927,20 +946,85 @@ namespace LibReplanetizer.LevelObjects
                 UID = source.UID;
                 transformation = source.transformation;
 
-                animationLayers.Clear();
-                animationLayers.AddRange(source.animationLayers);
+                int layerCount = source.animationLayers.Count;
+                for (int i = 0; i < layerCount; i++)
+                {
+                    AnimationLayer sourceLayer = source.animationLayers[i];
+                    List<AnimationData> targetAnimationData;
+                    if (i < animationLayers.Count)
+                    {
+                        AnimationLayer targetLayer = animationLayers[i];
+                        targetAnimationData = targetLayer.animationData;
+                        targetAnimationData.Clear();
+                    }
+                    else
+                    {
+                        targetAnimationData = new List<AnimationData>();
+                    }
+
+                    targetAnimationData.AddRange(sourceLayer.animationData);
+                    sourceLayer.animationData = targetAnimationData;
+                    if (i < animationLayers.Count)
+                    {
+                        animationLayers[i] = sourceLayer;
+                    }
+                    else
+                    {
+                        animationLayers.Add(sourceLayer);
+                    }
+                }
+                if (animationLayers.Count > layerCount)
+                {
+                    animationLayers.RemoveRange(layerCount, animationLayers.Count - layerCount);
+                }
                 manipulators.Clear();
                 manipulators.AddRange(source.manipulators);
+            }
+
+            private static RuntimeAnimationData? CopyRuntimeAnimationData(
+                RuntimeAnimationData? source,
+                RuntimeAnimationData? destination)
+            {
+                if (source == null)
+                {
+                    return null;
+                }
+
+                if (destination == null || destination.rotations.Length != source.rotations.Length)
+                {
+                    destination = new RuntimeAnimationData(
+                        source.speed,
+                        new Quaternion[source.rotations.Length],
+                        new Vector3[source.scalings.Length],
+                        new bool[source.hasScalings.Length],
+                        new Vector3[source.translations.Length],
+                        new bool[source.hasTranslations.Length]);
+                }
+
+                destination.CopyFrom(source);
+                return destination;
             }
 
             private void LoadAnimationLayers(Func<uint, byte[], bool> readMemory)
             {
                 visitedAddresses.Clear();
                 uint address = pAnimationLayers;
+                int layerIndex = 0;
 
                 while (address != 0 && visitedAddresses.Add(address))
                 {
                     if (!readMemory(address, animationLayerBuffer)) break;
+
+                    List<AnimationData> animationData;
+                    if (layerIndex < animationLayers.Count)
+                    {
+                        animationData = animationLayers[layerIndex].animationData;
+                        animationData.Clear();
+                    }
+                    else
+                    {
+                        animationData = new List<AnimationData>();
+                    }
 
                     AnimationLayer layer = new AnimationLayer
                     {
@@ -953,7 +1037,7 @@ namespace LibReplanetizer.LevelObjects
                         unk0x14 = ReadUint(animationLayerBuffer, 0x14),
                         unk0x18 = ReadUint(animationLayerBuffer, 0x18),
                         pNextAnimationLayer = ReadUint(animationLayerBuffer, 0x1C),
-                        animationData = new List<AnimationData>()
+                        animationData = animationData
                     };
 
                     for (int i = 0; i < layer.boneCount; i++)
@@ -969,14 +1053,28 @@ namespace LibReplanetizer.LevelObjects
                         });
                     }
 
-                    animationLayers.Add(layer);
+                    if (layerIndex < animationLayers.Count)
+                    {
+                        animationLayers[layerIndex] = layer;
+                    }
+                    else
+                    {
+                        animationLayers.Add(layer);
+                    }
+                    layerIndex++;
                     address = layer.pNextAnimationLayer;
+                }
+
+                if (animationLayers.Count > layerIndex)
+                {
+                    animationLayers.RemoveRange(layerIndex, animationLayers.Count - layerIndex);
                 }
             }
 
             private RuntimeAnimationData? ReadRuntimeAnimationData(
                 Func<uint, byte[], bool> readMemory,
-                uint address)
+                uint address,
+                RuntimeAnimationData? existing)
             {
                 if (address == 0 || !readMemory(address, runtimeAnimationHeaderBuffer))
                 {
@@ -1001,66 +1099,84 @@ namespace LibReplanetizer.LevelObjects
                     return null;
                 }
 
-                byte[] frameData = new byte[frameDataSize];
-                if (!readMemory(address, frameData))
+                if (runtimeAnimationDataBuffer.Length != frameDataSize)
+                {
+                    runtimeAnimationDataBuffer = new byte[frameDataSize];
+                }
+
+                if (!readMemory(address, runtimeAnimationDataBuffer))
                 {
                     return null;
                 }
 
-                Quaternion[] rotations = new Quaternion[rotationCount];
+                RuntimeAnimationData? result = existing;
+                if (result == null || result.rotations.Length != rotationCount)
+                {
+                    result = new RuntimeAnimationData(
+                        0.0f,
+                        new Quaternion[rotationCount],
+                        new Vector3[rotationCount],
+                        new bool[rotationCount],
+                        new Vector3[rotationCount],
+                        new bool[rotationCount]);
+                }
+
                 for (int i = 0; i < rotationCount; i++)
                 {
                     int offset = 0x10 + i * 0x08;
-                    rotations[i] = new Quaternion(
-                        ReadShort(frameData, offset + 0x00) / 32768.0f,
-                        ReadShort(frameData, offset + 0x02) / 32768.0f,
-                        ReadShort(frameData, offset + 0x04) / 32768.0f,
-                        -ReadShort(frameData, offset + 0x06) / 32768.0f);
+                    result.rotations[i] = new Quaternion(
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 32768.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 32768.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x04) / 32768.0f,
+                        -ReadShort(runtimeAnimationDataBuffer, offset + 0x06) / 32768.0f);
                 }
 
-                Vector3[] scalings = new Vector3[rotationCount];
-                bool[] hasScalings = new bool[rotationCount];
+                Array.Clear(result.scalings, 0, result.scalings.Length);
+                Array.Clear(result.hasScalings, 0, result.hasScalings.Length);
                 for (int i = 0; i < scalingCount; i++)
                 {
                     int offset = 0x10 + rotationDataOffset + i * 0x08;
-                    int bone = frameData[offset + 0x06];
-                    if (bone >= scalings.Length) continue;
+                    int bone = runtimeAnimationDataBuffer[offset + 0x06];
+                    if (bone >= result.scalings.Length) continue;
 
-                    scalings[bone] += new Vector3(
-                        ReadShort(frameData, offset + 0x00) / 4096.0f,
-                        ReadShort(frameData, offset + 0x02) / 4096.0f,
-                        ReadShort(frameData, offset + 0x04) / 4096.0f);
-                    hasScalings[bone] = true;
+                    result.scalings[bone] += new Vector3(
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 4096.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 4096.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x04) / 4096.0f);
+                    result.hasScalings[bone] = true;
                 }
 
-                Vector3[] translations = new Vector3[rotationCount];
-                bool[] hasTranslations = new bool[rotationCount];
+                Array.Clear(result.translations, 0, result.translations.Length);
+                Array.Clear(result.hasTranslations, 0, result.hasTranslations.Length);
                 for (int i = 0; i < translationCount; i++)
                 {
                     int offset = 0x10 + translationDataOffset + i * 0x08;
-                    int bone = frameData[offset + 0x06];
-                    if (bone >= translations.Length) continue;
+                    int bone = runtimeAnimationDataBuffer[offset + 0x06];
+                    if (bone >= result.translations.Length) continue;
 
-                    translations[bone] += new Vector3(
-                        ReadShort(frameData, offset + 0x00) / 1024.0f,
-                        ReadShort(frameData, offset + 0x02) / 1024.0f,
-                        ReadShort(frameData, offset + 0x04) / 1024.0f);
-                    hasTranslations[bone] = true;
+                    result.translations[bone] += new Vector3(
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 1024.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 1024.0f,
+                        ReadShort(runtimeAnimationDataBuffer, offset + 0x04) / 1024.0f);
+                    result.hasTranslations[bone] = true;
                 }
 
-                return new RuntimeAnimationData(
-                    ReadFloat(frameData, 0x00),
-                    rotations,
-                    scalings,
-                    hasScalings,
-                    translations,
-                    hasTranslations);
+                result.speed = ReadFloat(runtimeAnimationDataBuffer, 0x00);
+                return result;
             }
 
             private void LoadRuntimeAnimationData(Func<uint, byte[], bool> readMemory)
             {
-                previousAnimationData = ReadRuntimeAnimationData(readMemory, pPreviousAnimationData);
-                currentAnimationData = ReadRuntimeAnimationData(readMemory, pCurrentAnimationData);
+                previousAnimationData = ReadRuntimeAnimationData(
+                    readMemory,
+                    pPreviousAnimationData,
+                    previousAnimationDataStorage);
+                previousAnimationDataStorage = previousAnimationData ?? previousAnimationDataStorage;
+                currentAnimationData = ReadRuntimeAnimationData(
+                    readMemory,
+                    pCurrentAnimationData,
+                    currentAnimationDataStorage);
+                currentAnimationDataStorage = currentAnimationData ?? currentAnimationDataStorage;
             }
 
             private void LoadManipulators(Func<uint, byte[], bool> readMemory)
@@ -1091,7 +1207,6 @@ namespace LibReplanetizer.LevelObjects
 
             public void LoadAnimationData(Func<uint, byte[], bool> readMemory)
             {
-                animationLayers.Clear();
                 LoadAnimationLayers(readMemory);
                 manipulators.Clear();
                 LoadManipulators(readMemory);
