@@ -487,20 +487,19 @@ namespace Replanetizer.Renderer
                 {
                     rotation = Quaternion.Identity,
                     scale = Vector3.One,
-                    translation = Vector3.Zero
+                    translation = model.boneDatas[bone].translation
                 };
             }
 
-            Quaternion rotation = previousFrame.GetRotationQuaternion(bone, frame, blend) ?? Quaternion.Identity;
+            Quaternion baseRotation = previousFrame.GetRotationQuaternion(bone) ?? Quaternion.Identity;
+            Quaternion nextRotation = frame.GetRotationQuaternion(bone) ?? Quaternion.Identity;
+            Quaternion rotation = BlendQuaternion(baseRotation, nextRotation, blend);
             Vector3 baseScale = previousFrame.GetScaling(bone) ?? Vector3.One;
             Vector3 nextScale = frame.GetScaling(bone) ?? Vector3.One;
             Vector3 scaling = Vector3.Lerp(baseScale, nextScale, blend);
             Vector3 baseTranslation = previousFrame.GetTranslation(bone) ?? model.boneDatas[bone].translation;
             Vector3 nextTranslation = frame.GetTranslation(bone) ?? model.boneDatas[bone].translation;
             Vector3 translationVector = Vector3.Lerp(baseTranslation, nextTranslation, blend);
-
-            rotation = PackAndUnpackGameQuaternion(rotation);
-            translationVector = PackAndUnpackGameVector(translationVector, 4096.0f);
 
             return new BoneTransform
             {
@@ -551,30 +550,6 @@ namespace Replanetizer.Renderer
                 scale = Vector3.Lerp(previous.scale, current.scale, blend),
                 translation = Vector3.Lerp(previous.translation, current.translation, blend)
             };
-        }
-
-        private static float PackAndUnpackGameComponent(float value, float factor)
-        {
-            int packedValue = unchecked((int) (value * factor));
-            short packedComponent = unchecked((short) packedValue);
-            return packedComponent / factor;
-        }
-
-        private static Vector3 PackAndUnpackGameVector(Vector3 value, float factor)
-        {
-            return new Vector3(
-                PackAndUnpackGameComponent(value.X, factor),
-                PackAndUnpackGameComponent(value.Y, factor),
-                PackAndUnpackGameComponent(value.Z, factor));
-        }
-
-        private static Quaternion PackAndUnpackGameQuaternion(Quaternion value)
-        {
-            return new Quaternion(
-                PackAndUnpackGameComponent(value.X, 32768.0f),
-                PackAndUnpackGameComponent(value.Y, 32768.0f),
-                PackAndUnpackGameComponent(value.Z, 32768.0f),
-                PackAndUnpackGameComponent(value.W, 32768.0f));
         }
 
         private static Matrix4 CreateTransform(Quaternion rotation, Vector3 scale, Vector3 translation)

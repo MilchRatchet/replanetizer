@@ -210,7 +210,10 @@ namespace LibReplanetizer.Models.Animations
 
             byte[] frameBlock = ReadBlock(fs, offset + 0x10, frameLength * 0x10);
             rotations = new List<FrameBoneRotation>();
-            for (int i = 0; i < boneCount; i++)
+            int rotationCount = sec0Pointer <= frameBlock.Length
+                ? Math.Min(boneCount, sec0Pointer / 0x08)
+                : 0;
+            for (int i = 0; i < rotationCount; i++)
             {
                 short[] rot = new short[4];
                 int x = ReadShort(frameBlock, i * 8 + 0x00);
