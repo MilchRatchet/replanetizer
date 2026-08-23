@@ -45,7 +45,6 @@ namespace LibReplanetizer
 
         public MobyOcclusion? mobyOcclusion;
 
-        public byte[] billboardBytes;
         public byte[] soundConfigBytes;
 
         public List<Animation> playerAnimations;
@@ -67,6 +66,7 @@ namespace LibReplanetizer
 
         public LevelVariables levelVariables;
         public OcclusionData? occlusionData;
+        public BillboardTable? billboardTable;
 
         public List<LanguageData> english;
         public List<LanguageData> ukenglish;
@@ -143,7 +143,6 @@ namespace LibReplanetizer
                 game = engineParser.GetGameType();
 
                 //REMOVE THESE ASAP!!!!!111
-                billboardBytes = engineParser.GetBillboardBytes();
                 soundConfigBytes = engineParser.GetSoundConfigBytes();
 
                 LOGGER.Debug("Parsing skybox...");
@@ -204,6 +203,7 @@ namespace LibReplanetizer
                 textureConfigMenus = engineParser.GetTextureConfigMenu();
 
                 mobyOcclusion = engineParser.GetMobyOcclusion();
+                billboardTable = engineParser.GetBillboardTable();
 
                 collisionEngine = engineParser.GetCollisionModel();
 

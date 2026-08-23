@@ -66,7 +66,7 @@ namespace LibReplanetizer.Serializers
                 shrubModelPointer = SeekWrite(fs, WriteShrubModels(level.shrubModels, (int) fs.Position)),
                 shrubPointer = SeekWrite(fs, WriteShrubs(level.shrubs)),
                 textureConfigMenuPointer = SeekWrite(fs, WriteTextureConfigMenus(level.textureConfigMenus)),
-                texture2dPointer = SeekWrite(fs, level.billboardBytes),
+                billboardTablePointer = WriteBillboardTable(fs, level.billboardTable),
                 soundConfigPointer = SeekWrite(fs, level.soundConfigBytes),
                 lightPointer = SeekWrite(fs, WriteLights(level.lights)),
                 lightConfigPointer = SeekWrite(fs, WriteLightConfig(level.lightConfig)),
@@ -107,7 +107,7 @@ namespace LibReplanetizer.Serializers
                 shrubModelPointer = SeekWriteForced(fs, WriteShrubModels(level.shrubModels, (int) fs.Position)),
                 shrubPointer = SeekWriteForced(fs, WriteShrubs(level.shrubs)),
                 textureConfigMenuPointer = SeekWrite(fs, WriteTextureConfigMenus(level.textureConfigMenus)),
-                texture2dPointer = SeekWrite(fs, level.billboardBytes),
+                billboardTablePointer = WriteBillboardTable(fs, level.billboardTable),
                 mobyModelPointer = WriteMobies(fs, level.mobyModels),
                 soundConfigPointer = SeekWrite(fs, level.soundConfigBytes),
                 playerAnimationPointer = WritePlayerAnimations(fs, level.playerAnimations),
@@ -155,7 +155,7 @@ namespace LibReplanetizer.Serializers
                 tiePointer = WriteTies(fs, level.ties, 0x10),
                 unk4Pointer = SeekWrite(fs, level.unk4),
                 textureConfigMenuPointer = SeekWrite(fs, WriteTextureConfigMenus(level.textureConfigMenus)),
-                texture2dPointer = SeekWrite(fs, level.billboardBytes),
+                billboardTablePointer = WriteBillboardTable(fs, level.billboardTable),
                 skyboxPointer = level.skybox.WriteBytes(fs),
                 lightPointer = SeekWrite(fs, WriteLights(level.lights)),
                 lightConfigPointer = SeekWrite(fs, WriteLightConfig(level.lightConfig)),
@@ -422,6 +422,14 @@ namespace LibReplanetizer.Serializers
                 return 0;
 
             return mobyOcclusion.WriteBytes(fs);
+        }
+
+        private int WriteBillboardTable(FileStream fs, BillboardTable? billboardTable)
+        {
+            if (billboardTable == null)
+                return 0;
+
+            return billboardTable.WriteBytes(fs);
         }
     }
 }

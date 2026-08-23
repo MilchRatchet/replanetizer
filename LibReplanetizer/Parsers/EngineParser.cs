@@ -120,6 +120,36 @@ namespace LibReplanetizer.Parsers
             return GetTextureConfigMenu(engineHead.textureConfigMenuPointer, engineHead.textureConfigMenuCount);
         }
 
+        public BillboardTable? GetBillboardTable()
+        {
+            if (engineHead.billboardTablePointer == 0)
+                return null;
+
+            int endPointer = 0;
+
+            if (engineHead.game == GameType.RaC1)
+            {
+                endPointer = engineHead.texturePointer;
+
+                // RC1 boot level has no sound config.
+                if (engineHead.soundConfigPointer > 0)
+                    endPointer = engineHead.soundConfigPointer;
+            }
+            else if (engineHead.game == GameType.RaC2 || engineHead.game == GameType.RaC3)
+            {
+                endPointer = engineHead.mobyModelPointer;
+            }
+            else if (engineHead.game == GameType.DL)
+            {
+                endPointer = engineHead.skyboxPointer;
+            }
+
+            if (endPointer == 0)
+                return null;
+
+            return new BillboardTable(fileStream, engineHead.billboardTablePointer, endPointer);
+        }
+
         public Collision GetCollisionModel()
         {
             return GetCollisionModel(engineHead.collisionPointer);
@@ -131,26 +161,6 @@ namespace LibReplanetizer.Parsers
                 return null;
 
             return new MobyOcclusion(fileStream, engineHead.mobyOcclusionPointer);
-        }
-
-        public byte[] GetBillboardBytes()
-        {
-            if (engineHead.game == GameType.RaC1)
-            {
-                int endPointer = engineHead.texturePointer;
-
-                // RC1 boot level has no sound config.
-                if (engineHead.soundConfigPointer > 0)
-                    endPointer = engineHead.soundConfigPointer;
-
-                return ReadArbBytes(engineHead.texture2dPointer, endPointer - engineHead.texture2dPointer);
-            }
-
-
-            if (engineHead.game == GameType.RaC2 || engineHead.game == GameType.RaC3)
-                return ReadArbBytes(engineHead.texture2dPointer, engineHead.mobyModelPointer - engineHead.texture2dPointer);
-
-            return ReadArbBytes(engineHead.texture2dPointer, engineHead.skyboxPointer - engineHead.texture2dPointer);
         }
 
         public byte[] GetSoundConfigBytes()
