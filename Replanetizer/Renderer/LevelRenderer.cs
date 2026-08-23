@@ -45,6 +45,7 @@ namespace Replanetizer.Renderer
         private BillboardRenderer? envSamplesRenderer;
         private BillboardRenderer? envTransitionRenderer;
         private GrindPathRenderer? grindPathRenderer;
+        private PrecipitationRenderer? precipitationRenderer;
         private ToolRenderer toolRenderer;
         private DirectionalLightsBuffer dirLightsBuffer;
 
@@ -63,6 +64,11 @@ namespace Replanetizer.Renderer
             levelVariables = level.levelVariables;
             lights = level.lights;
             textures = level.textures;
+
+            if (level.precipitationMap != null && level.precipitationMap.rowStride > 0 && level.precipitationMap.numColumns > 0)
+            {
+                precipitationRenderer = new PrecipitationRenderer(shaderTable, level.precipitationMap, Vector2.Zero);
+            }
 
             skyRenderer = new SkyRenderer(shaderTable, level.textures, textureIDs);
             skyRenderer.Include(level.skybox);
@@ -378,6 +384,12 @@ namespace Replanetizer.Renderer
                 }
             }
 
+            if (payload.visibility.enablePrecipitation && precipitationRenderer != null)
+            {
+                precipitationRenderer.SetFog(levelVariables, useFog);
+                precipitationRenderer.Render(payload);
+            }
+
             if (payload.visibility.enableCollision)
                 collisionRenderer?.Render(payload);
 
@@ -449,6 +461,7 @@ namespace Replanetizer.Renderer
             envSamplesRenderer?.Dispose();
             envTransitionRenderer?.Dispose();
             grindPathRenderer?.Dispose();
+            precipitationRenderer?.Dispose();
 
             dirLightsBuffer.Dispose();
             toolRenderer?.Dispose();

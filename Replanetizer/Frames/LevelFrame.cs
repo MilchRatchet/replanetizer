@@ -298,6 +298,7 @@ namespace Replanetizer.Frames
                     if (ImGui.Checkbox("Skybox", ref rendererPayload.visibility.enableSkybox)) InvalidateView();
                     if (ImGui.Checkbox("Terrain", ref rendererPayload.visibility.enableTerrain)) InvalidateView();
                     if (ImGui.Checkbox("Collision", ref rendererPayload.visibility.enableCollision)) InvalidateView();
+                    if (ImGui.Checkbox("Precipitation", ref rendererPayload.visibility.enablePrecipitation)) InvalidateView();
                     ImGui.Separator();
                     if (ImGui.Checkbox("Transparency", ref rendererPayload.visibility.enableTransparency)) InvalidateView();
                     if (ImGui.Checkbox("Distance Culling", ref rendererPayload.visibility.enableDistanceCulling)) InvalidateView();
@@ -983,6 +984,9 @@ namespace Replanetizer.Frames
         public void Tick(float deltaTime)
         {
             rendererPayload.deltaTime = deltaTime;
+
+            if (rendererPayload.visibility.enablePrecipitation && level.precipitationMap != null)
+                InvalidateView();
 
             if (interactiveSession && hookLiveUpdate && hook != null && levelRenderer != null)
             {

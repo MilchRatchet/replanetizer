@@ -137,6 +137,12 @@
     <None Update="Shaders\splinevs.glsl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Shaders\precipitationfs.glsl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Shaders\precipitationvs.glsl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Shaders\vs.glsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

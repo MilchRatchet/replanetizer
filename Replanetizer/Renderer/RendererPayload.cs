@@ -24,7 +24,7 @@ namespace Replanetizer.Renderer
             enableDistanceCulling = true, enableFrustumCulling = true, enableFog = true, enableGameCameras = false,
             enablePointLights = false, enableEnvSamples = false, enableEnvTransitions = false, enableSoundInstances = false,
             enableGrindPaths = false, enableMeshlessModels = false, enableAnimations = false, enableLighting = true,
-            enableVisibleCulling = true;
+            enableVisibleCulling = true, enablePrecipitation = true;
 
             // Misc
             public bool hideCameraMoby = false;
