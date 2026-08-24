@@ -11,6 +11,7 @@ using LibReplanetizer;
 using LibReplanetizer.LevelObjects;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
+using Replanetizer.MemoryHook;
 using Replanetizer.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -227,6 +228,12 @@ namespace Replanetizer.Renderer
         {
             Add(mob, textureOverride);
         }
+
+        public void UpdateSkybox(SkyboxMemoryState state)
+        {
+            skyRenderer?.UpdateMemoryState(state);
+        }
+
         public override void Include<T>(List<T> list) => throw new NotImplementedException();
 
         public void Remove<T>(T obj, Level level)

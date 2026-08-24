@@ -25,6 +25,11 @@ namespace Replanetizer.MemoryHook
         const int CAMERA_DATA_SIZE = 0x20;
         const int MOBY_TABLE_DATA_SIZE = 0x0C;
         const int MOBY_DATA_SIZE = 0x100;
+        const int SKYBOX_ROOT_POINTER_SIZE = 0x04;
+        const int SKYBOX_ROOT_HEADER_SIZE = 0x20;
+        const int SKYBOX_LAYER_POINTER_TABLE_OFFSET = 0x1C;
+        const int SKYBOX_LAYER_POINTER_SIZE = 0x04;
+        const int SKYBOX_LAYER_ROTATION_OFFSET = 0x08;
 
         private readonly IProcessMemory? PROCESS_MEMORY;
         private readonly MemoryAddresses? ADDRESSES;
@@ -35,6 +40,7 @@ namespace Replanetizer.MemoryHook
             public readonly Camera camera = new Camera();
             public readonly List<Moby.IngameMobyMemory> mobyMemory =
                 new List<Moby.IngameMobyMemory>();
+            public SkyboxMemoryState skybox = new SkyboxMemoryState();
             public int mobyCount;
             public int frameNumber;
             public int readerCount;
@@ -52,6 +58,10 @@ namespace Replanetizer.MemoryHook
         private readonly byte[] CAMERA_DATA_BUFFER = new byte[CAMERA_DATA_SIZE];
         private readonly byte[] MOBY_TABLE_DATA_BUFFER = new byte[MOBY_TABLE_DATA_SIZE];
         private readonly byte[] FRAME_DATA_BUFFER = new byte[sizeof(int)];
+        private readonly byte[] SKYBOX_ROOT_POINTER_BUFFER = new byte[SKYBOX_ROOT_POINTER_SIZE];
+        private readonly byte[] SKYBOX_ROOT_HEADER_BUFFER = new byte[SKYBOX_ROOT_HEADER_SIZE];
+        private byte[] SKYBOX_LAYER_POINTER_TABLE_BUFFER = Array.Empty<byte>();
+        private readonly byte[] SKYBOX_LAYER_ROTATION_BUFFER = new byte[sizeof(float)];
         private byte[] MOBY_DATA_BUFFER = Array.Empty<byte>();
         private Thread? SNAPSHOT_THREAD;
         private volatile bool STOP_SNAPSHOT_THREAD;
@@ -71,6 +81,7 @@ namespace Replanetizer.MemoryHook
                     {
                         moby = 0x300A390A0,
                         camera = 0x300951500,
+                        skybox = 0x300A1A79C,
                         levelFrames = 0x300a10710
                     };
                     break;
@@ -79,6 +90,7 @@ namespace Replanetizer.MemoryHook
                     {
                         moby = 0x3015927B0,
                         camera = 0x30146E3C0,
+                        skybox = 0,
                         levelFrames = 0x30156B070
                     };
                     break;
@@ -87,6 +99,7 @@ namespace Replanetizer.MemoryHook
                     {
                         moby = 0x300F22260,
                         camera = 0x300D6B400,
+                        skybox = 0,
                         levelFrames = 0x301A70B30
                     };
                     break;
@@ -186,6 +199,14 @@ namespace Replanetizer.MemoryHook
             camera.rotation = snapshot.camera.rotation;
         }
 
+        private void UpdateSkybox(MemorySnapshot snapshot, LevelRenderer renderer)
+        {
+            if (ADDRESSES == null) return;
+            if (ADDRESSES.skybox == 0) return;
+
+            renderer.UpdateSkybox(snapshot.skybox);
+        }
+
         public void UpdateLevelObjects(Level level, LevelRenderer renderer, Camera? camera)
         {
             if (!hookWorking) return;
@@ -195,6 +216,7 @@ namespace Replanetizer.MemoryHook
             {
                 UpdateMobys(snapshot, level, renderer);
                 UpdateCamera(snapshot, camera);
+                UpdateSkybox(snapshot, renderer);
             }
             finally
             {
@@ -429,6 +451,8 @@ namespace Replanetizer.MemoryHook
                     ReadFloat(CAMERA_DATA_BUFFER, 0x10),
                     ReadFloat(CAMERA_DATA_BUFFER, 0x18) - (float) (Math.PI / 2));
 
+                CaptureSkyboxState(snapshot.skybox);
+
                 while (snapshot.mobyMemory.Count < mobyCount)
                 {
                     snapshot.mobyMemory.Add(new Moby.IngameMobyMemory());
@@ -470,6 +494,41 @@ namespace Replanetizer.MemoryHook
         private bool ReadGuestProcessBytes(uint address, byte[] buffer)
         {
             return ReadProcessBytes(GUEST_MEMORY_HOST_BASE + address, buffer);
+        }
+
+        private void CaptureSkyboxState(SkyboxMemoryState skybox)
+        {
+            if (ADDRESSES == null || ADDRESSES.skybox == 0) return;
+            if (!ReadProcessBytes(ADDRESSES.skybox, SKYBOX_ROOT_POINTER_BUFFER)) return;
+
+            uint skyboxRoot = ReadUint(SKYBOX_ROOT_POINTER_BUFFER, 0);
+            if (skyboxRoot == 0) return;
+
+            long skyboxRootAddress = GUEST_MEMORY_HOST_BASE + skyboxRoot;
+            if (!ReadProcessBytes(skyboxRootAddress, SKYBOX_ROOT_HEADER_BUFFER)) return;
+
+            int layerCount = ReadUshort(SKYBOX_ROOT_HEADER_BUFFER, 0x06);
+            if (layerCount <= 0 || layerCount > SkyboxMemoryState.MAX_SKYBOX_LAYERS) return;
+
+            int pointerTableSize = layerCount * SKYBOX_LAYER_POINTER_SIZE;
+            if (SKYBOX_LAYER_POINTER_TABLE_BUFFER.Length != pointerTableSize)
+            {
+                SKYBOX_LAYER_POINTER_TABLE_BUFFER = new byte[pointerTableSize];
+            }
+
+            long pointerTableAddress = skyboxRootAddress + SKYBOX_LAYER_POINTER_TABLE_OFFSET;
+            if (!ReadProcessBytes(pointerTableAddress, SKYBOX_LAYER_POINTER_TABLE_BUFFER)) return;
+
+            for (int i = 0; i < layerCount; i++)
+            {
+                uint layerAddress = ReadUint(SKYBOX_LAYER_POINTER_TABLE_BUFFER, i * SKYBOX_LAYER_POINTER_SIZE);
+                if (layerAddress == 0) continue;
+
+                long layerRotationAddress = GUEST_MEMORY_HOST_BASE + layerAddress + SKYBOX_LAYER_ROTATION_OFFSET;
+                if (!ReadProcessBytes(layerRotationAddress, SKYBOX_LAYER_ROTATION_BUFFER)) continue;
+
+                skybox.layerRotations[i] = ReadFloat(SKYBOX_LAYER_ROTATION_BUFFER, 0);
+            }
         }
 
         private bool ReadProcessInt(long address, out int value)

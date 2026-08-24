@@ -12,6 +12,7 @@ using LibReplanetizer.LevelObjects;
 using LibReplanetizer.Models;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
+using Replanetizer.MemoryHook;
 using Replanetizer.Tools;
 using Replanetizer.Utils;
 
@@ -24,6 +25,7 @@ namespace Replanetizer.Renderer
         private readonly ShaderTable shaderTable;
         private List<Texture> textures;
         private Dictionary<Texture, GLTexture> textureIds;
+        private SkyboxMemoryState skyboxMemoryState = new SkyboxMemoryState();
 
         public SkyRenderer(ShaderTable shaderTable, List<Texture> textures, Dictionary<Texture, GLTexture> textureIds)
         {
@@ -52,6 +54,11 @@ namespace Replanetizer.Renderer
 
         public override void Include<T>(List<T> list) => throw new NotImplementedException();
 
+        public void UpdateMemoryState(SkyboxMemoryState state)
+        {
+            skyboxMemoryState.CopyFrom(state);
+        }
+
         public override void Render(RendererPayload payload)
         {
             if (sky == null || container == null) return;
@@ -63,13 +70,40 @@ namespace Replanetizer.Renderer
             GL.BlendEquation(BlendEquationMode.FuncAdd);
             GL.Disable(EnableCap.DepthTest);
 
-            Matrix4 mvp = payload.camera.GetViewMatrix().ClearTranslation() * payload.camera.GetProjectionMatrix();
-            shaderTable.skyShader.SetUniformMatrix4(UniformName.worldToView, ref mvp);
+            Matrix4 view = payload.camera.GetViewMatrix().ClearTranslation();
+            Matrix4 projection = payload.camera.GetProjectionMatrix();
 
             container.Bind();
-            for (int i = 0; i < sky.textureConfig.Count; i++)
+            if (sky.textureConfigs.Count == 0)
             {
-                TextureConfig conf = sky.textureConfig[i];
+                RenderTextureConfigs(sky.textureConfig, view, projection, Matrix4.Identity);
+            }
+            else
+            {
+                for (int i = 0; i < sky.textureConfigs.Count; i++)
+                {
+                    Matrix4 layerRotation = Matrix4.CreateRotationZ(skyboxMemoryState.layerRotations[i]);
+
+                    RenderTextureConfigs(sky.textureConfigs[i], view, projection, layerRotation);
+                }
+            }
+
+            GL.Enable(EnableCap.DepthTest);
+            GL.Disable(EnableCap.Blend);
+            GLUtil.CheckGlError("SkyRenderer");
+        }
+
+        private void RenderTextureConfigs(
+            List<TextureConfig> configs,
+            Matrix4 view,
+            Matrix4 projection,
+            Matrix4 layerRotation)
+        {
+            Matrix4 mvp = view * layerRotation * projection;
+            shaderTable.skyShader.SetUniformMatrix4(UniformName.worldToView, ref mvp);
+
+            foreach (TextureConfig conf in configs)
+            {
                 shaderTable.skyShader.SetUniform1(UniformName.texAvailable, (conf.id > 0) ? 1.0f : 0.0f);
                 if (conf.id > 0)
                 {
@@ -84,10 +118,6 @@ namespace Replanetizer.Renderer
 
                 GL.DrawElements(PrimitiveType.Triangles, conf.size, DrawElementsType.UnsignedShort, conf.start * sizeof(ushort));
             }
-
-            GL.Enable(EnableCap.DepthTest);
-            GL.Disable(EnableCap.Blend);
-            GLUtil.CheckGlError("SkyRenderer");
         }
 
         public override void Dispose()
