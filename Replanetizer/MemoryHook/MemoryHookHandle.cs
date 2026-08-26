@@ -82,6 +82,7 @@ namespace Replanetizer.MemoryHook
                         moby = 0x300A390A0,
                         camera = 0x300951500,
                         skybox = 0x300A1A79C,
+                        planetId = 0x300969C70,
                         levelFrames = 0x300a10710
                     };
                     break;
@@ -91,6 +92,7 @@ namespace Replanetizer.MemoryHook
                         moby = 0x3015927B0,
                         camera = 0x30146E3C0,
                         skybox = 0,
+                        planetId = 0,
                         levelFrames = 0x30156B070
                     };
                     break;
@@ -100,6 +102,7 @@ namespace Replanetizer.MemoryHook
                         moby = 0x300F22260,
                         camera = 0x300D6B400,
                         skybox = 0,
+                        planetId = 0,
                         levelFrames = 0x301A70B30
                     };
                     break;
@@ -498,6 +501,57 @@ namespace Replanetizer.MemoryHook
 
         private void CaptureSkyboxState(SkyboxMemoryState skybox)
         {
+            skybox.Reset();
+            if (ADDRESSES == null || ADDRESSES.skybox == 0 || ADDRESSES.planetId == 0) return;
+            if (!ReadProcessInt(ADDRESSES.planetId, out int planetId)) return;
+
+            skybox.planetId = planetId;
+            switch (planetId)
+            {
+                case 0:
+                    skybox.source = SkyboxMemorySource.Identity;
+                    skybox.available = true;
+                    return;
+                case 1:
+                    CaptureFrameCounterSkyboxState(skybox);
+                    return;
+                case 19:
+                    CaptureLayerRotationSkyboxState(skybox);
+                    return;
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14:
+                case 15:
+                case 16:
+                case 17:
+                case 18:
+                default:
+                    return;
+            }
+        }
+
+        private void CaptureFrameCounterSkyboxState(SkyboxMemoryState skybox)
+        {
+            if (ADDRESSES == null || ADDRESSES.levelFrames == 0) return;
+            if (!ReadProcessInt(ADDRESSES.levelFrames, out int frameValue)) return;
+
+            skybox.frameValue = frameValue;
+            skybox.source = SkyboxMemorySource.FrameCounter;
+            skybox.available = true;
+        }
+
+        private void CaptureLayerRotationSkyboxState(SkyboxMemoryState skybox)
+        {
             if (ADDRESSES == null || ADDRESSES.skybox == 0) return;
             if (!ReadProcessBytes(ADDRESSES.skybox, SKYBOX_ROOT_POINTER_BUFFER)) return;
 
@@ -509,6 +563,7 @@ namespace Replanetizer.MemoryHook
 
             int layerCount = ReadUshort(SKYBOX_ROOT_HEADER_BUFFER, 0x06);
             if (layerCount <= 0 || layerCount > SkyboxMemoryState.MAX_SKYBOX_LAYERS) return;
+            skybox.layerCount = layerCount;
 
             int pointerTableSize = layerCount * SKYBOX_LAYER_POINTER_SIZE;
             if (SKYBOX_LAYER_POINTER_TABLE_BUFFER.Length != pointerTableSize)
@@ -529,6 +584,9 @@ namespace Replanetizer.MemoryHook
 
                 skybox.layerRotations[i] = ReadFloat(SKYBOX_LAYER_ROTATION_BUFFER, 0);
             }
+
+            skybox.source = SkyboxMemorySource.LayerRotations;
+            skybox.available = true;
         }
 
         private bool ReadProcessInt(long address, out int value)
