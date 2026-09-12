@@ -55,11 +55,7 @@ namespace LibReplanetizer.Models.Animations
             }
             public Vector3 scale;
             public byte bone;
-            /*
-             * This value is either 0 or 128
-             * Setting this to always 128 seems to work just fine
-             * Setting this to always 0 causes Clanks rotors to not be scaled correctly
-             */
+            // Negative values select the current sparse value instead of interpolating.
             public byte unk;
         }
 
@@ -84,11 +80,11 @@ namespace LibReplanetizer.Models.Animations
         private List<FrameBoneScaling> scalings { get; set; }
         private List<FrameBoneTranslation> translations { get; set; }
 
-        public Quaternion? GetRotationQuaternion(int bone)
+        public Quaternion GetRotationQuaternion(int bone)
         {
             if (bone >= rotations.Count)
             {
-                return null;
+                return Quaternion.Identity;
             }
 
             return rotations[bone].rotation;
@@ -96,28 +92,21 @@ namespace LibReplanetizer.Models.Animations
 
         public Matrix4 GetRotationMatrix(int bone)
         {
-            Quaternion? rotation = GetRotationQuaternion(bone);
+            if (bone >= rotations.Count)
+            {
+                return Matrix4.Identity;
+            }
 
-            return (rotation != null) ? Matrix4.CreateFromQuaternion((Quaternion) rotation) : Matrix4.Identity;
+            return Matrix4.CreateFromQuaternion(rotations[bone].rotation);
         }
 
-        public Quaternion? GetRotationQuaternion(int bone, Frame nextFrame, float blend)
+        public Quaternion GetRotationQuaternion(int bone, Frame nextFrame, float blend)
         {
-            Quaternion? baseRotation = GetRotationQuaternion(bone);
-            Quaternion? nextRotation = nextFrame.GetRotationQuaternion(bone);
+            Quaternion baseRotation = GetRotationQuaternion(bone);
+            Quaternion nextRotation = nextFrame.GetRotationQuaternion(bone);
 
-            if (baseRotation == null)
-            {
-                return nextRotation;
-            }
-
-            if (nextRotation == null)
-            {
-                return baseRotation;
-            }
-
-            Quaternion rotation = (Quaternion) baseRotation * (1.0f - blend);
-            Quaternion next = (Quaternion) nextRotation * blend;
+            Quaternion rotation = baseRotation * (1.0f - blend);
+            Quaternion next = nextRotation * blend;
             float dotProduct = rotation.X * next.X + rotation.Y * next.Y + rotation.Z * next.Z + rotation.W * next.W;
 
             rotation = dotProduct >= 0.0f ? rotation + next : rotation - next;
@@ -130,70 +119,41 @@ namespace LibReplanetizer.Models.Animations
             return rotation;
         }
 
-        public Vector3? GetScaling(int bone)
+        public Vector3 GetScaling(int bone)
         {
-            bool exists = scalings.Exists(s => s.bone == bone);
+            IEnumerable<FrameBoneScaling> boneScalings = scalings.Where(s => s.bone == bone);
 
-            if (exists)
-            {
-                // dl can have multiple scalings per bone
-                // doesn't seem to break the other rac games
-                return scalings.Where(s => s.bone == bone).Select(x => x.scale).Aggregate((a, b) => a + b);
-            }
+            if (boneScalings.Any() == false)
+                return Vector3.One;
 
-            return null;
+            // DL can have multiple scalings per bone
+            // doesn't seem to break the other rac games
+            return boneScalings.Select(x => x.scale).Aggregate((a, b) => a * b);
         }
 
         public bool GetScalingUnk(int bone)
         {
-            bool exists = scalings.Exists(s => s.bone == bone);
-
-            if (exists)
-            {
-                return scalings.First(s => s.bone == bone).unk == 128;
-            }
-
-            return false;
+            // TODO: How to do this for DL?
+            return (scalings.FirstOrDefault(s => s.bone == bone).unk & 0x80) != 0;
         }
 
-        public Vector3? GetTranslation(int bone)
+        public Vector3 GetTranslation(int bone, Vector3 fallbackTranslation)
         {
-            bool exists = translations.Exists(t => t.bone == bone);
+            IEnumerable<FrameBoneTranslation> boneTranslations = translations.Where(t => t.bone == bone);
 
-            if (exists)
-            {
-                // dl can have multiple translations per bone
-                // doesn't seem to break the other rac games
-                return translations.Where(t => t.bone == bone).Select(x => x.translation).Aggregate((a, b) => a + b);
-            }
+            // Translations replace the bone data translation
+            if (boneTranslations.Any() == false)
+                return fallbackTranslation;
 
-            return null;
+            // DL can have multiple translations per bone
+            // doesn't seem to break the other rac games
+            return boneTranslations.Select(x => x.translation).Aggregate((a, b) => a + b);
         }
 
-        public Matrix4 GetRotationMatrix(int bone, Frame nextFrame, float blend)
+        public bool GetTranslationUnk(int bone)
         {
-            Quaternion? rotation = GetRotationQuaternion(bone, nextFrame, blend);
-            return rotation != null ? Matrix4.CreateFromQuaternion((Quaternion) rotation) : Matrix4.Identity;
-        }
-
-        public Vector3? GetScaling(int bone, Frame nextFrame, float blend)
-        {
-            Vector3? baseScale = GetScaling(bone);
-            Vector3? nextScale = nextFrame.GetScaling(bone);
-
-            if (baseScale == null || nextScale == null) return null;
-
-            return (1.0f - blend) * baseScale + blend * nextScale;
-        }
-
-        public Vector3? GetTranslation(int bone, Frame nextFrame, float blend)
-        {
-            Vector3? baseTranslation = GetTranslation(bone);
-            Vector3? nextTranslation = nextFrame.GetTranslation(bone);
-
-            if (baseTranslation == null || nextTranslation == null) return null;
-
-            return (1.0f - blend) * baseTranslation + blend * nextTranslation;
+            // TODO: How to do this for DL?
+            return (translations.FirstOrDefault(s => s.bone == bone).unk & 0x80) != 0;
         }
 
         // Constructor for RaC 1, 2 and 3
