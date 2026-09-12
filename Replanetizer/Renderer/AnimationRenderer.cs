@@ -506,15 +506,19 @@ namespace Replanetizer.Renderer
                 };
             }
 
-            Quaternion baseRotation = previousFrame.GetRotationQuaternion(bone) ?? Quaternion.Identity;
-            Quaternion nextRotation = frame.GetRotationQuaternion(bone) ?? Quaternion.Identity;
+            Quaternion baseRotation = previousFrame.GetRotationQuaternion(bone);
+            Quaternion nextRotation = frame.GetRotationQuaternion(bone);
             Quaternion rotation = BlendQuaternion(baseRotation, nextRotation, blend);
-            Vector3 baseScale = previousFrame.GetScaling(bone) ?? Vector3.One;
-            Vector3 nextScale = frame.GetScaling(bone) ?? Vector3.One;
-            Vector3 scaling = Vector3.Lerp(baseScale, nextScale, blend);
-            Vector3 baseTranslation = previousFrame.GetTranslation(bone) ?? model.boneDatas[bone].translation;
-            Vector3 nextTranslation = frame.GetTranslation(bone) ?? model.boneDatas[bone].translation;
-            Vector3 translationVector = Vector3.Lerp(baseTranslation, nextTranslation, blend);
+            Vector3 baseScale = previousFrame.GetScaling(bone);
+            Vector3 nextScale = frame.GetScaling(bone);
+            Vector3 scaling = frame.GetScalingUnk(bone)
+                ? nextScale
+                : Vector3.Lerp(baseScale, nextScale, blend);
+            Vector3 baseTranslation = previousFrame.GetTranslation(bone, model.boneDatas[bone].translation);
+            Vector3 nextTranslation = frame.GetTranslation(bone, model.boneDatas[bone].translation);
+            Vector3 translationVector = frame.GetTranslationUnk(bone)
+                ? nextTranslation
+                : Vector3.Lerp(baseTranslation, nextTranslation, blend);
 
             return new BoneTransform
             {
@@ -536,9 +540,9 @@ namespace Replanetizer.Renderer
                 };
             }
 
-            Quaternion rotation = frame.GetRotationQuaternion(bone) ?? Quaternion.Identity;
-            Vector3 scaling = frame.GetScaling(bone) ?? Vector3.One;
-            Vector3 translationVector = frame.GetTranslation(bone) ?? model.boneDatas[bone].translation;
+            Quaternion rotation = frame.GetRotationQuaternion(bone);
+            Vector3 scaling = frame.GetScaling(bone);
+            Vector3 translationVector = frame.GetTranslation(bone, model.boneDatas[bone].translation);
 
             return new BoneTransform
             {
