@@ -5,6 +5,7 @@
 // either version 3 of the License, or (at your option) any later version.
 // Please see the LICENSE.md file for more details.
 
+using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp;
 using System.IO;
@@ -112,6 +113,15 @@ namespace Replanetizer.Utils
                     ExportTexture(textures[j], Path.Join(path, $"mobyload_{i}_{j}.png"), true);
                 }
             }
+        }
+        public static byte[] ImportDDSTexture(string path, int len)
+        {
+            byte[] data = new byte[len];
+
+            Buffer.BlockCopy(File.ReadAllBytes(path), 128, data, 0, len);
+            Array.Resize(ref data, data.Length + 16);
+
+            return data;
         }
     }
 }

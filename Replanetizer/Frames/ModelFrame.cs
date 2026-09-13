@@ -406,7 +406,7 @@ namespace Replanetizer.Frames
                     UpdateTextures();
                     if (modelTextureList != null && modelTextureList.Count > 0)
                     {
-                        TextureFrame.RenderTextureList(modelTextureList, 64, levelFrame.textureIds);
+                        TextureFrame.RenderTextureList(modelTextureList, 64, levelFrame.textureIds, levelFrame);
                         ImGui.Separator();
                     }
                     int fileFormat = (int) exportSettings.format;
