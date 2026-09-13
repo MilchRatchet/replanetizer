@@ -766,13 +766,22 @@ namespace Replanetizer.Renderer
             if (!payload.visibility.enableMobyCollision)
                 return;
 
-            if (hasBonePositions && bonePositions != null)
-            {
-                collisionRenderer.Render(payload, bonePositions);
-                return;
-            }
+            collisionRenderer.Render(payload, hasBonePositions ? bonePositions : null);
+        }
 
-            collisionRenderer.Render(payload);
+        private void UpdateBoneMatrices(RendererPayload payload, MobyModel mobyModel)
+        {
+            hasBonePositions = false;
+
+            if (mob != null && mob.memory != null)
+            {
+                ComputeBoneMatricesWithMemory(mobyModel, mob.memory);
+            }
+            else
+            {
+                List<Animation> animations = (loadedModelID == 0 && ratchetAnimations != null && ratchetAnimations.Count > 0) ? ratchetAnimations : mobyModel.animations;
+                ComputeBoneMatricesWithoutMemory(mobyModel, animations, payload.forcedAnimationID, payload.deltaTime);
+            }
         }
 
         private void ComputeBoneMatricesWithMemory(
@@ -928,19 +937,11 @@ namespace Replanetizer.Renderer
 
             GLTexture.blueNoiseTexture.Bind(1);
 
-            if (mob != null && mob.memory != null)
-            {
-                ComputeBoneMatricesWithMemory(mobyModel, mob.memory);
-            }
-            else
-            {
-                List<Animation> animations = (loadedModelID == 0 && ratchetAnimations != null && ratchetAnimations.Count > 0) ? ratchetAnimations : mobyModel.animations;
-                ComputeBoneMatricesWithoutMemory(mobyModel, animations, payload.forcedAnimationID, payload.deltaTime);
-            }
+            UpdateBoneMatrices(payload, mobyModel);
 
             if (payload.visibility.enableMobyCollision)
             {
-                collisionRenderer?.Render(payload, bonePositions);
+                collisionRenderer?.Render(payload, hasBonePositions ? bonePositions : null);
             }
 
             if (!payload.visibility.enableMoby
