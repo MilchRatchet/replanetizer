@@ -1135,7 +1135,10 @@ namespace LibReplanetizer.LevelObjects
                         -ReadShort(runtimeAnimationDataBuffer, offset + 0x06) / 32768.0f);
                 }
 
-                Array.Clear(result.scalings, 0, result.scalings.Length);
+                for (int i = 0; i < result.scalings.Length; i++)
+                {
+                    result.scalings[i] = Vector3.One;
+                }
                 Array.Clear(result.hasScalings, 0, result.hasScalings.Length);
                 for (int i = 0; i < scalingCount; i++)
                 {
@@ -1143,7 +1146,7 @@ namespace LibReplanetizer.LevelObjects
                     int bone = runtimeAnimationDataBuffer[offset + 0x06];
                     if (bone >= result.scalings.Length) continue;
 
-                    result.scalings[bone] += new Vector3(
+                    result.scalings[bone] *= new Vector3(
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 4096.0f,
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 4096.0f,
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x04) / 4096.0f);
