@@ -29,7 +29,7 @@ namespace Replanetizer.Frames
             itemSizeX = IMAGE_SIZE.X + ImGui.GetStyle().ItemSpacing.X;
         }
 
-        public static void RenderTextureList(List<Texture> textures, float itemSizeX, Dictionary<Texture, GLTexture> textureIds, string prefix = "", int additionalOffset = 0, bool useLocalIndex = false)
+        public static void RenderTextureList(List<Texture> textures, float itemSizeX, Dictionary<Texture, GLTexture> textureIds, LevelFrame levelFrame, string prefix = "", int additionalOffset = 0, bool useLocalIndex = false)
         {
             var width = ImGui.GetContentRegionAvail().X - additionalOffset;
             var itemsPerRow = (int) Math.Floor(width / itemSizeX);
@@ -59,6 +59,18 @@ namespace Replanetizer.Frames
                         if (targetFile.Length > 0)
                         {
                             TextureIO.ExportTexture(t, targetFile, true);
+                        }
+                    }
+                    if (ImGui.Button("Replace"))
+                    {
+                        var sourceFile = CrossFileDialog.OpenFile(filter: ".dds");
+                        if (sourceFile.Length > 0)
+                        {
+                            t.data = TextureIO.ImportDDSTexture(sourceFile, t.data.Length - 16);
+
+                            if (levelFrame.textureIds.Remove(t, out var oldGl))
+                                oldGl.Dispose();
+                            levelFrame.textureIds[t] = new GLTexture(t);
                         }
                     }
                     ImGui.EndPopup();
@@ -100,20 +112,20 @@ namespace Replanetizer.Frames
         {
             if (ImGui.CollapsingHeader("Level textures"))
             {
-                RenderTextureList(level.textures, itemSizeX, levelFrame.textureIds, "levelTextures");
+                RenderTextureList(level.textures, itemSizeX, levelFrame.textureIds, levelFrame, "levelTextures");
             }
             if (ImGui.CollapsingHeader("Menu textures"))
             {
                 var menuTextures = level.textures.FindAll(tex => level.textureConfigMenus.Contains(tex.id));
-                RenderTextureList(menuTextures, itemSizeX, levelFrame.textureIds, "menuTextures", 0, true);
+                RenderTextureList(menuTextures, itemSizeX, levelFrame.textureIds, levelFrame, "menuTextures", 0, true);
             }
             if (ImGui.CollapsingHeader("Spaceship textures"))
             {
-                RenderTextureList(level.spaceshipTextures, itemSizeX, levelFrame.textureIds, "spaceshipTextures");
+                RenderTextureList(level.spaceshipTextures, itemSizeX, levelFrame.textureIds, levelFrame, "spaceshipTextures");
             }
             if (ImGui.CollapsingHeader("Gadget textures"))
             {
-                RenderTextureList(level.gadgetTextures, itemSizeX, levelFrame.textureIds, "gadgetTextures");
+                RenderTextureList(level.gadgetTextures, itemSizeX, levelFrame.textureIds, levelFrame, "gadgetTextures");
             }
             if (ImGui.CollapsingHeader("Armor textures"))
             {
@@ -122,7 +134,7 @@ namespace Replanetizer.Frames
                     List<Texture> textureList = level.armorTextures[i];
                     if (ImGui.TreeNode("Armor " + i))
                     {
-                        RenderTextureList(textureList, itemSizeX, levelFrame.textureIds);
+                        RenderTextureList(textureList, itemSizeX, levelFrame.textureIds, levelFrame);
                         ImGui.TreePop();
                     }
                 }
@@ -133,7 +145,7 @@ namespace Replanetizer.Frames
                 {
                     if (ImGui.TreeNode("Mission " + mission.missionID))
                     {
-                        RenderTextureList(mission.textures, itemSizeX, levelFrame.textureIds);
+                        RenderTextureList(mission.textures, itemSizeX, levelFrame.textureIds, levelFrame);
                         ImGui.TreePop();
                     }
                 }
@@ -148,7 +160,7 @@ namespace Replanetizer.Frames
                     {
                         if (ImGui.TreeNode("Mobyload " + i))
                         {
-                            RenderTextureList(textureList, itemSizeX, levelFrame.textureIds);
+                            RenderTextureList(textureList, itemSizeX, levelFrame.textureIds, levelFrame);
                             ImGui.TreePop();
                         }
                     }
