@@ -247,6 +247,8 @@ namespace Replanetizer
         {
             RenderMenuBar();
 
+            ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport(), ImGuiDockNodeFlags.None);
+
             foreach (Frame frame in openFrames)
             {
                 frame.RenderAsWindow(deltaTime);

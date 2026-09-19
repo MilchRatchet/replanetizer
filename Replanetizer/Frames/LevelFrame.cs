@@ -514,21 +514,13 @@ namespace Replanetizer.Frames
             if (!initialized) CustomGLControl_Load();
 
             var viewport = ImGui.GetMainViewport();
-            var pos = viewport.Pos;
-            var size = viewport.Size;
 
-            ImGui.SetNextWindowPos(pos);
-            ImGui.SetNextWindowSize(size);
-            ImGui.SetNextWindowViewport(viewport.ID);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
-
-            ImGui.Begin(frameName,
-                ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize |
-                ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoNavFocus |
-                ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoDocking);
-
-            ImGui.PopStyleVar(2);
+            ImGui.SetNextWindowPos(viewport.WorkPos, ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(viewport.WorkSize, ImGuiCond.FirstUseEver);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, SysVector2.Zero);
+            ImGui.Begin(frameName, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.MenuBar |
+                                   ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+            ImGui.PopStyleVar();
 
             Render(deltaTime);
             ImGui.End();
