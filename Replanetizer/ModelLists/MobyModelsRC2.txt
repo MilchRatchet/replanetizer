@@ -33,6 +33,7 @@
 0261=Hydropack
 02F6=Swingshot Node
 0323=Swingshot Node
+0325=Spawn Point
 0330=Taxi
 046E=Platinum Bolt
 046F=Teleporter

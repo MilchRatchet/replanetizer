@@ -60,6 +60,7 @@ namespace Replanetizer.Frames
         private bool listenToCallbacks;
         private bool hideCallbackButton;
         private LevelFrame? levelFrame;
+        private PvarInspectorFrame pvarInspectorFrame;
 
         private Dictionary<string, Dictionary<string, PropertyInfo>> properties = new();
 
@@ -73,6 +74,7 @@ namespace Replanetizer.Frames
             this.levelFrame = levelFrame;
             this.listenToCallbacks = listenToCallbacks;
             this.hideCallbackButton = hideCallbackButton;
+            this.pvarInspectorFrame = new PvarInspectorFrame(wnd);
         }
 
         private void UpdateLevelFrame()
@@ -577,6 +579,16 @@ namespace Replanetizer.Frames
                 if (ImGui.CollapsingHeader(propertyName))
                 {
                     Array array = (Array) val;
+
+                    if (target is Moby pvarMoby && propertyInfo.Name == nameof(Moby.pVars))
+                    {
+                        pvarInspectorFrame.moby = pvarMoby;
+                        pvarInspectorFrame.levelFrame = levelFrame;
+
+                        ImGui.PushID("PvarInspector");
+                        pvarInspectorFrame.Render(0);
+                        ImGui.PopID();
+                    }
 
                     if (array.Length == 0)
                     {
