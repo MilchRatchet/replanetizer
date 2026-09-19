@@ -598,6 +598,7 @@
 0516=Gadgebot Entrance
 0527=Blarg Ship
 052A=Ice Cube
+052C=Swingshot Skill Point Manager
 052E=Nanotech Upgrade Vendor
 053D=UNKNOWN | Gadgetron ratchet teleport location
 0542=Gun
