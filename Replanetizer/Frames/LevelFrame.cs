@@ -55,7 +55,7 @@ namespace Replanetizer.Frames
         private readonly string[] selectionSpaceOptions = { TransformSpace.Global.HUMAN_NAME, TransformSpace.Local.HUMAN_NAME };
 
         private int antialiasing = 1;
-        private readonly string[] antialiasingOptions = { "Off", "2x SSAA", "4x SSAA", "8x SSAA" };
+        public static readonly string[] antialiasingOptions = { "Off", "2x SSAA", "4x SSAA", "8x SSAA" };
 
         private Vector2 mousePos;
         private Vector3 prevMouseRay;
@@ -281,52 +281,13 @@ namespace Replanetizer.Frames
                     {
                         subFrames.Add(new CameraControlFrame(this.wnd, this));
                     }
-                    ImGui.EndMenu();
-                }
-
-                if (ImGui.BeginMenu("Render"))
-                {
-                    if (ImGui.Checkbox("Moby", ref rendererPayload.visibility.enableMoby)) InvalidateView();
-                    if (ImGui.Checkbox("Tie", ref rendererPayload.visibility.enableTie)) InvalidateView();
-                    if (ImGui.Checkbox("Shrub", ref rendererPayload.visibility.enableShrub)) InvalidateView();
-                    if (ImGui.Checkbox("Spline", ref rendererPayload.visibility.enableSpline)) InvalidateView();
-                    if (ImGui.Checkbox("Cuboid", ref rendererPayload.visibility.enableCuboid)) InvalidateView();
-                    if (ImGui.Checkbox("Spheres", ref rendererPayload.visibility.enableSpheres)) InvalidateView();
-                    if (ImGui.Checkbox("Cylinders", ref rendererPayload.visibility.enableCylinders)) InvalidateView();
-                    if (ImGui.Checkbox("Pills", ref rendererPayload.visibility.enablePills)) InvalidateView();
-                    if (ImGui.Checkbox("SoundInstances", ref rendererPayload.visibility.enableSoundInstances)) InvalidateView();
-                    if (ImGui.Checkbox("Cameras", ref rendererPayload.visibility.enableGameCameras)) InvalidateView();
-                    if (ImGui.Checkbox("Pointlights", ref rendererPayload.visibility.enablePointLights)) InvalidateView();
-                    if (ImGui.Checkbox("EnvSamples", ref rendererPayload.visibility.enableEnvSamples)) InvalidateView();
-                    if (ImGui.Checkbox("EnvTransitions", ref rendererPayload.visibility.enableEnvTransitions)) InvalidateView();
-                    if (ImGui.Checkbox("GrindPaths", ref rendererPayload.visibility.enableGrindPaths)) InvalidateView();
-                    if (ImGui.Checkbox("Skybox", ref rendererPayload.visibility.enableSkybox)) InvalidateView();
-                    if (ImGui.Checkbox("Terrain", ref rendererPayload.visibility.enableTerrain)) InvalidateView();
-                    if (ImGui.Checkbox("Collision", ref rendererPayload.visibility.enableCollision)) InvalidateView();
-                    if (ImGui.Checkbox("Moby Collision", ref rendererPayload.visibility.enableMobyCollision)) InvalidateView();
-                    ImGui.Separator();
-                    if (ImGui.Checkbox("Transparency", ref rendererPayload.visibility.enableTransparency)) InvalidateView();
-                    if (ImGui.Checkbox("Distance Culling", ref rendererPayload.visibility.enableDistanceCulling)) InvalidateView();
-                    if (ImGui.Checkbox("Frustum Culling", ref rendererPayload.visibility.enableFrustumCulling)) InvalidateView();
-                    if (interactiveSession && ImGui.Checkbox("Visible Culling", ref rendererPayload.visibility.enableVisibleCulling)) InvalidateView();
-                    if (ImGui.Checkbox("Fog", ref rendererPayload.visibility.enableFog)) InvalidateView();
-                    if (ImGui.Checkbox("Lighting", ref rendererPayload.visibility.enableLighting)) InvalidateView();
-                    if (ImGui.Checkbox("Meshless Models", ref rendererPayload.visibility.enableMeshlessModels)) InvalidateView();
-                    if (ImGui.Checkbox("Bangles", ref showBangles))
+                    if (ImGui.MenuItem("Render"))
                     {
-                        rendererPayload.SetShowSubmodels(showBangles);
-                        InvalidateView();
+                        if (!subFrames.Any(f => f is RenderFrame))
+                        {
+                            subFrames.Add(new RenderFrame(this.wnd, this));
+                        }
                     }
-                    ImGui.PushItemWidth(90.0f);
-                    if (ImGui.Combo("Antialiasing", ref antialiasing, antialiasingOptions, antialiasingOptions.Length))
-                    {
-                        UpdateAaLevel();
-                        InvalidateView();
-                    }
-                    ImGui.PopItemWidth();
-                    ImGui.Separator();
-                    ImGui.Checkbox("Camera Info", ref enableCameraInfo);
-
                     ImGui.EndMenu();
                 }
 
@@ -1216,6 +1177,36 @@ namespace Replanetizer.Frames
         public void InvalidateView()
         {
             invalidate = true;
+        }
+
+        public RendererPayload.VisibilitySettings RenderVisibility => rendererPayload.visibility;
+
+        public bool EnableCameraInfo
+        {
+            get => enableCameraInfo;
+            set => enableCameraInfo = value;
+        }
+
+        public bool ShowBangles
+        {
+            get => showBangles;
+            set
+            {
+                showBangles = value;
+                rendererPayload.SetShowSubmodels(showBangles);
+                InvalidateView();
+            }
+        }
+
+        public int Antialiasing
+        {
+            get => antialiasing;
+            set
+            {
+                antialiasing = value;
+                UpdateAaLevel();
+                InvalidateView();
+            }
         }
 
         public MemoryHookHandle StartMemoryHook(bool useBreakpoints)
