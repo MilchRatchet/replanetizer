@@ -153,6 +153,19 @@ namespace Replanetizer.Frames
             UpdateWindowSize();
             OnResize();
             SelectModel(model);
+
+            levelFrame.ObjectSelected += LevelFrameOnObjectSelected;
+        }
+
+        private void LevelFrameOnObjectSelected(LevelObject obj)
+        {
+            if (obj is not ModelObject modelObject)
+                return;
+            if (ReferenceEquals(modelObject.model, selectedModel))
+                return;
+
+            SelectModel(modelObject.model);
+            PrepareForArrowInput();
         }
 
         public override void RenderAsWindow(float deltaTime)
@@ -975,6 +988,7 @@ namespace Replanetizer.Frames
 
         public override void Dispose()
         {
+            levelFrame.ObjectSelected -= LevelFrameOnObjectSelected;
             base.Dispose();
             renderer?.Dispose();
             meshRenderer?.Dispose();
