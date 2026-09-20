@@ -101,6 +101,16 @@ namespace Replanetizer.Frames
 
         private List<Frame> subFrames;
 
+        private readonly Dictionary<Frame, Func<Frame>> subFrameFactories = new Dictionary<Frame, Func<Frame>>();
+
+        private Frame AddSubFrame(Func<Frame> factory)
+        {
+            Frame frame = factory();
+            subFrames.Add(frame);
+            subFrameFactories[frame] = factory;
+            return frame;
+        }
+
         private void ToolboxOnToolChanged(object? sender, EventArgs e) => InvalidateView();
 
         public LevelFrame(Window wnd, string res) : base(wnd)
@@ -121,9 +131,6 @@ namespace Replanetizer.Frames
             toolbox.ToolChanged += ToolboxOnToolChanged;
 
             rendererPayload = new RendererPayload(camera, selectedObjects, toolbox, showBangles);
-
-            UpdateWindowSize();
-            OnResize();
 
             LoadLevel(level);
         }
@@ -184,7 +191,7 @@ namespace Replanetizer.Frames
                         }
                         if (ImGui.MenuItem("Level as Model"))
                         {
-                            subFrames.Add(new LevelExportFrame(this.wnd, this));
+                            AddSubFrame(() => new LevelExportFrame(this.wnd, this));
                         }
                         if (ImGui.MenuItem("All textures"))
                         {
@@ -238,7 +245,7 @@ namespace Replanetizer.Frames
                 {
                     if (ImGui.MenuItem("Object properties"))
                     {
-                        subFrames.Add(
+                        AddSubFrame(() =>
                             new PropertyFrame(this.wnd, this, listenToCallbacks: true)
                             {
                                 selection = selectedObjects
@@ -247,26 +254,25 @@ namespace Replanetizer.Frames
                     }
                     if (ImGui.MenuItem("Model viewer"))
                     {
-                        if (selectedObjects.newestObject != null && selectedObjects.newestObject is ModelObject obj)
+                        Model? initialModel = (selectedObjects.newestObject is ModelObject obj) ? obj.model : null;
+                        AddSubFrame(() =>
                         {
-                            subFrames.Add(new ModelFrame(this.wnd, this, this.shaderTable, obj.model));
-                        }
-                        else
-                        {
-                            subFrames.Add(new ModelFrame(this.wnd, this, this.shaderTable));
-                        }
+                            Model? model = initialModel;
+                            initialModel = null;
+                            return new ModelFrame(this.wnd, this, this.shaderTable, model);
+                        });
                     }
                     if (ImGui.MenuItem("Texture viewer"))
                     {
-                        subFrames.Add(new TextureFrame(this.wnd, this));
+                        AddSubFrame(() => new TextureFrame(this.wnd, this));
                     }
                     if (ImGui.MenuItem("Lights"))
                     {
-                        subFrames.Add(new LightsFrame(this.wnd, this, level.lights, level.lightConfig));
+                        AddSubFrame(() => new LightsFrame(this.wnd, this, level.lights, level.lightConfig));
                     }
                     if (ImGui.MenuItem("Level variables"))
                     {
-                        subFrames.Add(
+                        AddSubFrame(() =>
                             new PropertyFrame(this.wnd, this, "Level variables", true)
                             {
                                 selectedObject = level.levelVariables
@@ -275,17 +281,17 @@ namespace Replanetizer.Frames
                     }
                     if (ImGui.MenuItem("Memory Hook"))
                     {
-                        subFrames.Add(new MemoryHookFrame(this.wnd, this));
+                        AddSubFrame(() => new MemoryHookFrame(this.wnd, this));
                     }
                     if (ImGui.MenuItem("Camera Control"))
                     {
-                        subFrames.Add(new CameraControlFrame(this.wnd, this));
+                        AddSubFrame(() => new CameraControlFrame(this.wnd, this));
                     }
                     if (ImGui.MenuItem("Render"))
                     {
                         if (!subFrames.Any(f => f is RenderFrame))
                         {
-                            subFrames.Add(new RenderFrame(this.wnd, this));
+                            AddSubFrame(() => new RenderFrame(this.wnd, this));
                         }
                     }
                     ImGui.EndMenu();
@@ -458,7 +464,7 @@ namespace Replanetizer.Frames
 
             camera.aspect = (float) width / height;
 
-            if (width != prevWidth || height != prevHeight)
+            if (width != prevWidth || height != prevHeight || renderer == null)
             {
                 InvalidateView();
                 OnResize();
@@ -490,11 +496,12 @@ namespace Replanetizer.Frames
 
         public override void Render(float deltaTime)
         {
-            if (renderer == null) return;
-
             RenderMenuBar();
             RenderTextOverlay(deltaTime);
             UpdateWindowSize();
+
+            if (renderer == null) return;
+
             Tick(deltaTime);
 
             if (invalidate)
@@ -538,8 +545,6 @@ namespace Replanetizer.Frames
             GL.Enable(EnableCap.DepthTest);
 
             initialized = true;
-
-            OnResize();
         }
 
         void LoadLevelTextures()
@@ -1291,6 +1296,56 @@ namespace Replanetizer.Frames
             if (!subFrames.Contains(frame)) subFrames.Add(frame);
         }
 
+        public void LoadNewLevel(string path)
+        {
+            Level newLevel = new Level(path);
+
+            camera.CancelNavigation();
+            mouseGrabHandler.Cancel(wnd);
+            orbitMouseGrabHandler.Cancel(wnd);
+            zoomMouseGrabHandler.Cancel(wnd);
+            hook?.Dispose();
+            hook = null;
+            interactiveSession = false;
+
+            List<Func<Frame>> rebuild = new List<Func<Frame>>();
+            foreach (Frame sub in subFrames)
+            {
+                if (sub.isOpen && subFrameFactories.TryGetValue(sub, out var factory))
+                    rebuild.Add(factory);
+            }
+
+            foreach (Frame sub in subFrames)
+            {
+                sub.Dispose();
+            }
+            subFrames.Clear();
+            subFrameFactories.Clear();
+
+            levelRenderer?.Dispose();
+            levelRenderer = null;
+            DisposeLevelTextures();
+            selectedMissions.Clear();
+            selectedObjects.Clear();
+            level?.Dispose();
+
+            LoadLevel(newLevel);
+
+            foreach (Func<Frame> factory in rebuild)
+            {
+                AddSubFrame(factory);
+            }
+        }
+
+        private void DisposeLevelTextures()
+        {
+            foreach (var texture in textureIds.Values)
+            {
+                texture.Dispose();
+            }
+            textureIds.Clear();
+        }
+
         public override void Dispose()
         {
             camera.CancelNavigation();
@@ -1313,6 +1368,7 @@ namespace Replanetizer.Frames
                 }
                 subFrames.Clear();
             }
+            subFrameFactories.Clear();
 
             renderer?.Dispose();
             levelRenderer?.Dispose();
@@ -1320,11 +1376,7 @@ namespace Replanetizer.Frames
 
             if (textureIds != null)
             {
-                foreach (var texture in textureIds.Values)
-                {
-                    texture.Dispose();
-                }
-                textureIds.Clear();
+                DisposeLevelTextures();
             }
 
             level?.Dispose();

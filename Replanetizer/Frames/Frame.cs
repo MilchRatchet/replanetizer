@@ -6,6 +6,7 @@
 // Please see the LICENSE.md file for more details.
 
 using System;
+using System.Collections.Generic;
 using ImGuiNET;
 
 namespace Replanetizer.Frames
@@ -15,15 +16,25 @@ namespace Replanetizer.Frames
         protected Window wnd;
         protected abstract string frameName { get; set; }
         public bool isOpen = true;
-        private uint frameID;
-        private static uint frameIDSource { get { return FRAME_ID_SOURCE++; } }
-        private static uint FRAME_ID_SOURCE = 0;
+        private string frameID;
+        private bool frameIDReleased = false;
+        private static readonly HashSet<string> CLAIMED_IDS = new HashSet<string>();
 
         public Frame(Window wnd)
         {
             this.wnd = wnd;
-            frameID = frameIDSource;
+            frameID = ClaimFrameID(GetType());
             SetWindowTitle(frameName);
+        }
+
+        private static string ClaimFrameID(Type type)
+        {
+            for (uint i = 0; ; i++)
+            {
+                string candidate = type.Name + "#" + i;
+                if (CLAIMED_IDS.Add(candidate))
+                    return candidate;
+            }
         }
 
         protected void SetWindowTitle(string title)
@@ -48,6 +59,11 @@ namespace Replanetizer.Frames
 
         public virtual void Dispose()
         {
+            if (frameIDReleased)
+                return;
+
+            frameIDReleased = true;
+            CLAIMED_IDS.Remove(frameID);
         }
     }
 }
