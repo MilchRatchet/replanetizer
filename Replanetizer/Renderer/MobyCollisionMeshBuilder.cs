@@ -35,8 +35,6 @@ namespace Replanetizer.Renderer
         private const int SPHERE_SEGMENTS = 16;
         private const int CAPSULE_STACKS = 8;
 
-        private static readonly uint PrimitiveColor = PackColor(0, 255, 255, 255);
-
         public static MobyCollisionMesh Build(MobyModelCollision collision)
         {
             return Build(collision, null);
@@ -88,12 +86,12 @@ namespace Replanetizer.Renderer
                 case MobyModelCollisionShape.SphereVariant:
                     AddSphere(vertices, indices,
                         new Vector3(primitive.sphereCenterX, primitive.sphereCenterY, primitive.sphereCenterZ),
-                        primitive.sphereRadius, PrimitiveColor);
+                        primitive.sphereRadius, CollisionGeometryCategory.MobyPrimitive);
                     break;
                 case MobyModelCollisionShape.IndexedSphere:
                     if (TryGetIndexedVertex(indexedVertices, primitive.indexedSphereVertex, out Vector3 indexedSphereCenter))
                     {
-                        AddSphere(vertices, indices, indexedSphereCenter, primitive.indexedSphereRadius, PrimitiveColor);
+                        AddSphere(vertices, indices, indexedSphereCenter, primitive.indexedSphereRadius, CollisionGeometryCategory.MobyPrimitive);
                     }
                     break;
                 case MobyModelCollisionShape.Capsule:
@@ -101,7 +99,7 @@ namespace Replanetizer.Renderer
                     AddCapsule(vertices, indices,
                         new Vector3(primitive.capsuleCenterX, primitive.capsuleCenterY,
                             primitive.capsuleCenterZ + capsuleLength * 0.5f),
-                        Vector3.UnitZ, capsuleLength * 0.5f, primitive.capsuleRadius, PrimitiveColor);
+                        Vector3.UnitZ, capsuleLength * 0.5f, primitive.capsuleRadius, CollisionGeometryCategory.MobyPrimitive);
                     break;
                 case MobyModelCollisionShape.IndexedCapsule:
                     if (TryGetIndexedVertex(indexedVertices, primitive.indexedCapsuleVertex0, out Vector3 capsuleStart)
@@ -113,11 +111,11 @@ namespace Replanetizer.Renderer
                         {
                             Vector3 capsuleOrigin = capsuleStart.Z < capsuleEnd.Z ? capsuleStart : capsuleEnd;
                             AddCapsule(vertices, indices, capsuleOrigin + Vector3.UnitZ * (length * 0.5f),
-                                Vector3.UnitZ, length * 0.5f, primitive.indexedCapsuleRadius, PrimitiveColor);
+                                Vector3.UnitZ, length * 0.5f, primitive.indexedCapsuleRadius, CollisionGeometryCategory.MobyPrimitive);
                         }
                         else
                         {
-                            AddSphere(vertices, indices, capsuleStart, primitive.indexedCapsuleRadius, PrimitiveColor);
+                            AddSphere(vertices, indices, capsuleStart, primitive.indexedCapsuleRadius, CollisionGeometryCategory.MobyPrimitive);
                         }
                     }
                     break;
@@ -147,7 +145,7 @@ namespace Replanetizer.Renderer
             return bonePositions;
         }
 
-        private static void AddSphere(List<float> vertices, List<uint> indices, Vector3 center, float radius, uint color)
+        private static void AddSphere(List<float> vertices, List<uint> indices, Vector3 center, float radius, CollisionGeometryCategory category)
         {
             if (radius <= 0.0f || float.IsNaN(radius) || float.IsInfinity(radius)) return;
 
@@ -165,7 +163,7 @@ namespace Replanetizer.Renderer
                         sinLatitude * MathF.Cos(longitude),
                         sinLatitude * MathF.Sin(longitude),
                         cosLatitude);
-                    AddVertex(vertices, center + direction * radius, color);
+                    AddVertex(vertices, center + direction * radius, CollisionVertexMetadata.Pack(0, category));
                 }
             }
 
@@ -173,7 +171,7 @@ namespace Replanetizer.Renderer
         }
 
         private static void AddCapsule(List<float> vertices, List<uint> indices, Vector3 center, Vector3 axis,
-            float halfLength, float radius, uint color)
+            float halfLength, float radius, CollisionGeometryCategory category)
         {
             if (halfLength < 0.0f) halfLength = -halfLength;
             if (radius <= 0.0f || float.IsNaN(radius) || float.IsInfinity(radius)) return;
@@ -206,7 +204,7 @@ namespace Replanetizer.Renderer
                 {
                     float longitude = MathF.Tau * segment / SPHERE_SEGMENTS;
                     Vector3 direction = side * MathF.Cos(longitude) + up * MathF.Sin(longitude);
-                    AddVertex(vertices, ringCenter + direction * radial, color);
+                    AddVertex(vertices, ringCenter + direction * radial, CollisionVertexMetadata.Pack(0, category));
                 }
             }
 
@@ -267,35 +265,22 @@ namespace Replanetizer.Renderer
                 return;
 
             uint firstVertex = (uint) (vertices.Count / VERTEX_STRIDE);
-            uint color = PackCollisionTypeColor(triangle.collisionType);
-            AddVertex(vertices, vertex0, color);
-            AddVertex(vertices, vertex1, color);
-            AddVertex(vertices, vertex2, color);
+            float metadata = CollisionVertexMetadata.Pack(triangle.collisionType, CollisionGeometryCategory.MobyTriangle);
+            AddVertex(vertices, vertex0, metadata);
+            AddVertex(vertices, vertex1, metadata);
+            AddVertex(vertices, vertex2, metadata);
 
             indices.Add(firstVertex);
             indices.Add(firstVertex + 1);
             indices.Add(firstVertex + 2);
         }
 
-        private static void AddVertex(List<float> vertices, Vector3 position, uint color)
+        private static void AddVertex(List<float> vertices, Vector3 position, float metadata)
         {
             vertices.Add(position.X);
             vertices.Add(position.Y);
             vertices.Add(position.Z);
-            vertices.Add(BitConverter.UInt32BitsToSingle(color));
-        }
-
-        private static uint PackColor(byte red, byte green, byte blue, byte alpha)
-        {
-            return (uint) (red | (green << 8) | (blue << 16) | (alpha << 24));
-        }
-
-        private static uint PackCollisionTypeColor(byte collisionType)
-        {
-            byte red = (byte) ((collisionType & 0x03) << 6);
-            byte green = (byte) ((collisionType & 0x0C) << 4);
-            byte blue = (byte) (collisionType & 0xF0);
-            return PackColor(red, green, blue, 255);
+            vertices.Add(metadata);
         }
     }
 }
