@@ -476,9 +476,8 @@ namespace Replanetizer.Frames
 
             var viewport = ImGui.GetMainViewport();
 
-            ImGui.SetNextWindowPos(viewport.WorkPos, ImGuiCond.FirstUseEver);
-            ImGui.SetNextWindowSize(viewport.WorkSize, ImGuiCond.FirstUseEver);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, SysVector2.Zero);
+            ImGui.SetNextWindowDockID(wnd.dockspaceId, ImGuiCond.FirstUseEver);
             ImGui.Begin(frameName, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.MenuBar |
                                    ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
             ImGui.PopStyleVar();

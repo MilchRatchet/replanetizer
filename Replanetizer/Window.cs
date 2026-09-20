@@ -35,6 +35,8 @@ namespace Replanetizer
 
         public string[] args;
 
+        public uint dockspaceId;
+
         public Window(string[] args) : base(GameWindowSettings.Default,
             new NativeWindowSettings() { ClientSize = new Vector2i(1760, 990), APIVersion = new Version(3, 3), Flags = ContextFlags.ForwardCompatible, Profile = ContextProfile.Core, Vsync = VSyncMode.On })
         {
@@ -247,7 +249,7 @@ namespace Replanetizer
         {
             RenderMenuBar();
 
-            ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport(), ImGuiDockNodeFlags.None);
+            dockspaceId = ImGui.DockSpaceOverViewport(dockspaceId, ImGui.GetMainViewport(), ImGuiDockNodeFlags.None);
 
             foreach (Frame frame in openFrames)
             {
