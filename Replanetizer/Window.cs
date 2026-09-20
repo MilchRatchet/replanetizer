@@ -35,6 +35,9 @@ namespace Replanetizer
 
         public string[] args;
 
+        public uint dockspaceId;
+
+        private string? pendingLevelPath = null;
         public Window(string[] args) : base(GameWindowSettings.Default,
             new NativeWindowSettings() { ClientSize = new Vector2i(1760, 990), APIVersion = new Version(3, 3), Flags = ContextFlags.ForwardCompatible, Profile = ContextProfile.Core, Vsync = VSyncMode.On })
         {
@@ -69,8 +72,7 @@ namespace Replanetizer
 
             if (args.Length > 0)
             {
-                LevelFrame lf = new LevelFrame(this, args[0]);
-                AddFrame(lf);
+                RequestOpenLevel(args[0]);
             }
         }
 
@@ -90,6 +92,29 @@ namespace Replanetizer
             {
                 // Tell ImGui of the new size
                 controller.WindowResized(ClientSize.X, ClientSize.Y);
+            }
+        }
+        private void RequestOpenLevel(string path)
+        {
+            pendingLevelPath = path;
+        }
+
+        private void ApplyPendingLevelRequest()
+        {
+            if (pendingLevelPath == null)
+                return;
+
+            string path = pendingLevelPath;
+            pendingLevelPath = null;
+
+            LevelFrame? existing = openFrames.OfType<LevelFrame>().FirstOrDefault();
+            if (existing != null)
+            {
+                existing.LoadNewLevel(path);
+            }
+            else
+            {
+                AddFrame(new LevelFrame(this, path));
             }
         }
 
@@ -142,10 +167,6 @@ namespace Replanetizer
                 controller.MouseScroll(e.Offset);
         }
 
-        private static bool FrameIsLevel(Frame frame)
-        {
-            return frame.GetType() == typeof(LevelFrame);
-        }
         private void RenderMenuBar()
         {
             if (ImGui.BeginMainMenuBar())
@@ -157,13 +178,7 @@ namespace Replanetizer
                         var res = CrossFileDialog.OpenFile(filter: ".ps3");
                         if (res.Length > 0)
                         {
-                            foreach (var frame in openFrames.Where(FrameIsLevel))
-                            {
-                                frame.Dispose();
-                            }
-                            openFrames.RemoveAll(FrameIsLevel);
-                            LevelFrame lf = new LevelFrame(this, res);
-                            AddFrame(lf);
+                            RequestOpenLevel(res);
                         }
                     }
                     if (ImGui.MenuItem("Open ps3data folder"))
@@ -199,11 +214,7 @@ namespace Replanetizer
 
                             if (ImGui.MenuItem(name))
                             {
-                                foreach (var frame in openFrames.Where(FrameIsLevel))
-                                    frame.Dispose();
-
-                                openFrames.RemoveAll(FrameIsLevel);
-                                openFrames.Add(new LevelFrame(this, levelPath));
+                                RequestOpenLevel(levelPath);
                             }
 
                             if (!exists)
@@ -246,6 +257,9 @@ namespace Replanetizer
         private void RenderUI(float deltaTime)
         {
             RenderMenuBar();
+            ApplyPendingLevelRequest();
+
+            dockspaceId = ImGui.DockSpaceOverViewport(dockspaceId, ImGui.GetMainViewport(), ImGuiDockNodeFlags.None);
 
             foreach (Frame frame in openFrames)
             {

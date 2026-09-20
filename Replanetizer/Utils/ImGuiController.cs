@@ -61,6 +61,8 @@ namespace Replanetizer.Utils
             SetPerFrameImGuiData(1f / 60f);
 
             ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+            // Prevent imgui.ini from being written. Just the mere existence of the file causes issues with docking persistence.
+            unsafe { ImGui.GetIO().NativePtr->IniFilename = null; }
 
             ImGui.NewFrame();
             frameBegun = true;
