@@ -132,6 +132,8 @@ namespace Replanetizer.Frames
 
             rendererPayload = new RendererPayload(camera, selectedObjects, toolbox, showBangles);
 
+            subFrames.Add(new HoverMetadataFrame(this.wnd, this));
+
             LoadLevel(level);
         }
 
@@ -1089,7 +1091,7 @@ namespace Replanetizer.Frames
             renderer = new FramebufferRenderer(width, height, shaderTable.resolveShader);
         }
 
-        public LevelObject? GetObjectAtScreenPosition(Vector2 pos)
+        public LevelObject? GetObjectAtScreenPosition(Vector2 pos, bool updateToolState = true)
         {
             if (xLock || yLock || zLock) return null;
 
@@ -1162,19 +1164,43 @@ namespace Replanetizer.Frames
                 case RenderedObjectType.GrindPath:
                     return level.grindPaths.Find(x => x.globalID == hitId);
                 case RenderedObjectType.Tool:
-                    switch (hitId)
+                    if (updateToolState)
                     {
-                        case 0: xLock = true; break;
-                        case 1: yLock = true; break;
-                        case 2: zLock = true; break;
+                        switch (hitId)
+                        {
+                            case 0: xLock = true; break;
+                            case 1: yLock = true; break;
+                            case 2: zLock = true; break;
+                        }
+                        InvalidateView();
                     }
-                    InvalidateView();
                     return null;
                 case RenderedObjectType.Skybox:
                     return null;
             }
 
             return null;
+        }
+
+        public bool TryGetHoveredObject(out LevelObject? obj, out SysVector2 screenPosition)
+        {
+            obj = null;
+            screenPosition = new SysVector2(wnd.MousePosition.X, wnd.MousePosition.Y);
+
+            bool isAltDown = wnd.KeyboardState.IsKeyDown(Keys.LeftAlt) ||
+                wnd.KeyboardState.IsKeyDown(Keys.RightAlt);
+            bool isLeftDown = wnd.MouseState.IsButtonDown(MouseButton.Left);
+            bool isRightDown = wnd.MouseState.IsButtonDown(MouseButton.Right);
+            if (!isAltDown || isLeftDown || isRightDown || renderer == null || !contentRegion.Contains((int) wnd.MousePosition.X, (int) wnd.MousePosition.Y))
+                return false;
+
+            if (mousePos.X < 0 || mousePos.Y < 0 || mousePos.X >= width || mousePos.Y >= height)
+                return false;
+
+            LevelObject? hoveredObject = null;
+            renderer.ExposeFramebuffer(() => { hoveredObject = GetObjectAtScreenPosition(mousePos, false); });
+            obj = hoveredObject;
+            return obj != null;
         }
 
 
