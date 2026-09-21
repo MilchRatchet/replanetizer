@@ -13,7 +13,9 @@ using System.Linq;
 using System.Reflection;
 using ImGuiNET;
 using LibReplanetizer.LevelObjects;
+using LibReplanetizer.Models;
 using OpenTK.Mathematics;
+using Replanetizer.Renderer;
 
 namespace Replanetizer.Frames
 {
@@ -38,25 +40,26 @@ namespace Replanetizer.Frames
 
         public override void RenderAsWindow(float deltaTime)
         {
-            if (!levelFrame.TryGetHoveredObject(out LevelObject? hoveredObject, out System.Numerics.Vector2 screenPosition))
-                return;
-            if (hoveredObject == null)
+            int metadata;
+            if (!levelFrame.TryGetHoverData(out metadata, out Vector2 mousePos))
                 return;
 
-            var viewport = ImGui.GetMainViewport();
-            var viewportCenter = viewport.WorkPos + viewport.WorkSize * 0.5f;
+            System.Numerics.Vector2 screenPosition = new System.Numerics.Vector2(mousePos.X, mousePos.Y);
+
+            ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+            System.Numerics.Vector2 viewportCenter = viewport.WorkPos + viewport.WorkSize * 0.5f;
             bool placeLeft = screenPosition.X > viewportCenter.X;
             bool placeAbove = screenPosition.Y > viewportCenter.Y;
-            var windowPosition = screenPosition + new System.Numerics.Vector2(
+            System.Numerics.Vector2 windowPosition = screenPosition + new System.Numerics.Vector2(
                 placeLeft ? -CURSOR_OFFSET : CURSOR_OFFSET,
                 placeAbove ? -CURSOR_OFFSET : CURSOR_OFFSET);
-            var pivot = new System.Numerics.Vector2(placeLeft ? 1.0f : 0.0f, placeAbove ? 1.0f : 0.0f);
+            System.Numerics.Vector2 pivot = new System.Numerics.Vector2(placeLeft ? 1.0f : 0.0f, placeAbove ? 1.0f : 0.0f);
 
             ImGui.SetNextWindowPos(windowPosition, ImGuiCond.Always, pivot);
             ImGui.SetNextWindowBgAlpha(0.85f);
 
             if (ImGui.Begin(frameName, WINDOW_FLAGS))
-                RenderMetadata(hoveredObject);
+                RenderMetadata(metadata);
             ImGui.End();
         }
 
@@ -64,56 +67,49 @@ namespace Replanetizer.Frames
         {
         }
 
-        private static void RenderMetadata(LevelObject hoveredObject)
+        private static void RenderMetadata(int metadata)
         {
-            ImGui.TextUnformatted(hoveredObject.GetType().Name);
-            ImGui.TextUnformatted("Global ID: " + hoveredObject.globalID);
+            RenderedObjectType hitType = (RenderedObjectType) (metadata >> 24);
+            int hitId = metadata & 0xffffff;
 
-            foreach (PropertyInfo property in GetMetadataProperties(hoveredObject.GetType()))
+            ImGui.TextUnformatted(hitType.ToString());
+
+            switch (hitType)
             {
-                object? value = property.GetValue(hoveredObject);
-                if (value == null)
-                    continue;
+                case RenderedObjectType.Collision:
+                    {
+                        int geometryCategory = hitId >> 8;
+                        CollisionType type = new CollisionType((byte) (hitId & 0xFF));
 
-                ImGui.TextUnformatted(
-                    (property.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? property.Name) +
-                    ": " + FormatValue(value));
+                        switch (geometryCategory)
+                        {
+                            case 1:
+                                ImGui.TextUnformatted("Standard Collision");
+                                break;
+                            case 2:
+                                ImGui.TextUnformatted("Hero Collision");
+                                break;
+                            case 3:
+                                ImGui.TextUnformatted("Unknown Collision");
+                                break;
+                            case 4:
+                                ImGui.TextUnformatted("Moby Triangle Collision");
+                                break;
+                            case 5:
+                                ImGui.TextUnformatted("Moby Primitive Collision");
+                                break;
+                            default:
+                                break;
+                        }
+
+                        ImGui.TextUnformatted("Type: " + type.GetMaterialName() + " [" + type.materialID + "]");
+                        ImGui.TextUnformatted("Sound: " + type.groupID);
+                        ImGui.TextUnformatted("Ignore Camera: " + type.ignoreCameraCollision.ToString());
+                    }
+                    break;
+                default:
+                    break;
             }
-        }
-
-        private static IEnumerable<PropertyInfo> GetMetadataProperties(Type objectType)
-        {
-            return objectType.GetProperties()
-                .Where(property => property.GetIndexParameters().Length == 0)
-                .Where(property => property.GetCustomAttribute<CategoryAttribute>()?.Category == "Attributes")
-                .Where(property => IsSupportedType(property.PropertyType))
-                .OrderBy(property => property.MetadataToken)
-                .ThenBy(property => property.Name);
-        }
-
-        private static bool IsSupportedType(Type type)
-        {
-            Type underlyingType = Nullable.GetUnderlyingType(type) ?? type;
-            return underlyingType.IsPrimitive || underlyingType.IsEnum ||
-                underlyingType == typeof(decimal) || underlyingType == typeof(string) ||
-                underlyingType == typeof(Vector2) || underlyingType == typeof(Vector3) ||
-                underlyingType == typeof(Vector4) || underlyingType == typeof(Quaternion);
-        }
-
-        private static string FormatValue(object value)
-        {
-            if (value is Vector2 vector2)
-                return $"({vector2.X.ToString("G6", CultureInfo.InvariantCulture)}, {vector2.Y.ToString("G6", CultureInfo.InvariantCulture)})";
-            if (value is Vector3 vector3)
-                return $"({vector3.X.ToString("G6", CultureInfo.InvariantCulture)}, {vector3.Y.ToString("G6", CultureInfo.InvariantCulture)}, {vector3.Z.ToString("G6", CultureInfo.InvariantCulture)})";
-            if (value is Vector4 vector4)
-                return $"({vector4.X.ToString("G6", CultureInfo.InvariantCulture)}, {vector4.Y.ToString("G6", CultureInfo.InvariantCulture)}, {vector4.Z.ToString("G6", CultureInfo.InvariantCulture)}, {vector4.W.ToString("G6", CultureInfo.InvariantCulture)})";
-            if (value is Quaternion quaternion)
-                return $"({quaternion.X.ToString("G6", CultureInfo.InvariantCulture)}, {quaternion.Y.ToString("G6", CultureInfo.InvariantCulture)}, {quaternion.Z.ToString("G6", CultureInfo.InvariantCulture)}, {quaternion.W.ToString("G6", CultureInfo.InvariantCulture)})";
-            if (value is IFormattable formattable)
-                return formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty;
-
-            return value.ToString() ?? string.Empty;
         }
     }
 }

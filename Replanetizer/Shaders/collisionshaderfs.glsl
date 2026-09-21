@@ -8,6 +8,7 @@ in vec3 v_cameraPos;
 
 // Ouput data
 layout(location = 0) out vec4 color;
+layout(location = 1) out int id;
 uniform vec4 fogColor;
 
 vec3 materialColor(uint material)
@@ -44,7 +45,7 @@ vec3 materialColor(uint material)
         vec3(0.00f, 0.00f, 0.00f), //  0x1C
         vec3(0.00f, 0.00f, 0.00f), //  0x1D
         vec3(0.00f, 0.00f, 0.00f), //  0x1E
-        vec3(0.00f, 0.00f, 0.00f) //   0x1F - Invalid
+        vec3(1.00f, 1.00f, 0.00f) //   0x1F - Ordinary
     );
 
     if (gl_FrontFacing == false)
@@ -122,4 +123,6 @@ void main() {
 
     color = vec4(clamp(color.rgb, 0.0, 1.0), 1.0);
     color.xyz = (fogColor.xyz - color.xyz) * fogBlend + color.xyz;
+
+    id = int((17u << 24u) | (geometryCategory << 8u) | collisionType);
 }

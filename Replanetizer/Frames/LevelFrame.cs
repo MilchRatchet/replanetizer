@@ -245,6 +245,13 @@ namespace Replanetizer.Frames
 
                 if (ImGui.BeginMenu("Windows"))
                 {
+                    if (ImGui.MenuItem("Render Settings"))
+                    {
+                        if (!subFrames.Any(f => f is RenderFrame))
+                        {
+                            AddSubFrame(() => new RenderFrame(this.wnd, this));
+                        }
+                    }
                     if (ImGui.MenuItem("Object properties"))
                     {
                         AddSubFrame(() =>
@@ -288,13 +295,6 @@ namespace Replanetizer.Frames
                     if (ImGui.MenuItem("Camera Control"))
                     {
                         AddSubFrame(() => new CameraControlFrame(this.wnd, this));
-                    }
-                    if (ImGui.MenuItem("Render"))
-                    {
-                        if (!subFrames.Any(f => f is RenderFrame))
-                        {
-                            AddSubFrame(() => new RenderFrame(this.wnd, this));
-                        }
                     }
                     ImGui.EndMenu();
                 }
@@ -1097,7 +1097,7 @@ namespace Replanetizer.Frames
 
             int hit = 0;
             GL.ReadBuffer(ReadBufferMode.ColorAttachment1);
-            GL.ReadPixels((int) pos.X, height - (int) pos.Y, 1, 1, PixelFormat.RedInteger, PixelType.Int, ref hit);
+            GL.ReadPixels((int) pos.X, height - 1 - (int) pos.Y, 1, 1, PixelFormat.RedInteger, PixelType.Int, ref hit);
 
             if (hit == 0) return null;
 
@@ -1176,16 +1176,17 @@ namespace Replanetizer.Frames
                     }
                     return null;
                 case RenderedObjectType.Skybox:
+                case RenderedObjectType.Collision:
                     return null;
             }
 
             return null;
         }
 
-        public bool TryGetHoveredObject(out LevelObject? obj, out SysVector2 screenPosition)
+        public bool TryGetHoverData(out int metadata, out Vector2 screenPosition)
         {
-            obj = null;
-            screenPosition = new SysVector2(wnd.MousePosition.X, wnd.MousePosition.Y);
+            metadata = 0;
+            screenPosition = mousePos;
 
             bool isAltDown = wnd.KeyboardState.IsKeyDown(Keys.LeftAlt) ||
                 wnd.KeyboardState.IsKeyDown(Keys.RightAlt);
@@ -1197,10 +1198,26 @@ namespace Replanetizer.Frames
             if (mousePos.X < 0 || mousePos.Y < 0 || mousePos.X >= width || mousePos.Y >= height)
                 return false;
 
-            LevelObject? hoveredObject = null;
-            renderer.ExposeFramebuffer(() => { hoveredObject = GetObjectAtScreenPosition(mousePos, false); });
-            obj = hoveredObject;
-            return obj != null;
+            if (xLock || yLock || zLock)
+                return false;
+
+            int hit = 0;
+
+            int readX = (int) screenPosition.X;
+            int readY = height - 1 - (int) screenPosition.Y;
+
+            renderer.ExposeFramebuffer(() =>
+            {
+                GL.ReadBuffer(ReadBufferMode.ColorAttachment1);
+                GL.ReadPixels(readX, readY, 1, 1, PixelFormat.RedInteger, PixelType.Int, ref hit);
+            });
+
+            if (hit == 0)
+                return false;
+
+            metadata = hit;
+
+            return true;
         }
 
 
