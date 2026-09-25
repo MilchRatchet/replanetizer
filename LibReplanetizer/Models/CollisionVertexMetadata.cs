@@ -21,20 +21,30 @@ namespace LibReplanetizer.Models
 
     public static class CollisionVertexMetadata
     {
-        public static float Pack(byte collisionType, CollisionGeometryCategory category)
+        public static float Pack(CollisionType collisionType, CollisionGeometryCategory category)
         {
-            uint value = collisionType | ((uint) category << 8);
+            uint value = collisionType.data | ((uint) category << 8);
             return BitConverter.UInt32BitsToSingle(value);
         }
 
-        public static byte GetCollisionType(float metadata)
+        public static CollisionType GetCollisionType(uint metadata)
         {
-            return (byte) (BitConverter.SingleToUInt32Bits(metadata) & 0xFF);
+            return new CollisionType((byte) (metadata & 0xFF));
+        }
+
+        public static CollisionType GetCollisionType(float metadata)
+        {
+            return GetCollisionType(BitConverter.SingleToUInt32Bits(metadata));
+        }
+
+        public static CollisionGeometryCategory GetCategory(uint metadata)
+        {
+            return (CollisionGeometryCategory) ((metadata >> 8) & 0xFF);
         }
 
         public static CollisionGeometryCategory GetCategory(float metadata)
         {
-            return (CollisionGeometryCategory) ((BitConverter.SingleToUInt32Bits(metadata) >> 8) & 0xFF);
+            return GetCategory(BitConverter.SingleToUInt32Bits(metadata));
         }
     }
 }

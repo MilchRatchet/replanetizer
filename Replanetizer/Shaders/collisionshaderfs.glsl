@@ -19,8 +19,8 @@ vec3 materialColor(uint material)
         vec3(0.25f, 0.25f, 0.25f), //  0x02 - Magnetic Ramp
         vec3(0.50f, 0.50f, 0.25f), //  0x03 - Mud/Quicksand
         vec3(0.00f, 1.00f, 1.00f), //  0x04 - Water Slide
-        vec3(0.00f, 0.00f, 0.00f), //  0x05 - TODO: Grindrail Unk
-        vec3(0.00f, 0.00f, 0.00f), //  0x06 - TODO: Unused
+        vec3(1.00f, 0.50f, 0.00f), //  0x05 - Grindrail Jump
+        vec3(0.00f, 0.00f, 0.00f), //  0x06
         vec3(1.00f, 1.00f, 1.00f), //  0x07 - Ice Sliding
         vec3(0.00f, 1.00f, 0.00f), //  0x08 - Sliding Off
         vec3(0.50f, 0.25f, 0.75f), //  0x09 - Disable Ledge Grab
@@ -98,25 +98,18 @@ void main() {
         }
 
         metadataColor *= mix(1.0f, 0.55f, groupPattern);
-
-        if (ignoreCameraCollision) {
-            float hatchA = stripePattern(gl_FragCoord.xy, normalize(vec2(1.0f, 1.0f)), 10.0f, 0.10f);
-            float hatchB = stripePattern(gl_FragCoord.xy, normalize(vec2(1.0f, -1.0f)), 10.0f, 0.10f);
-            float crosshatch = max(hatchA, hatchB);
-            metadataColor = mix(metadataColor, vec3(1.0f), crosshatch * 0.45f);
-        }
     }
     else if (geometryCategory == 2u) {
-        metadataColor = vec3(0.0, 0.0, 1.0);
+        metadataColor = vec3(0.5f, 0.5f, 1.0f);
     }
     else if (geometryCategory == 3u) {
-        metadataColor = vec3(0.0, 1.0, 1.0);
+        metadataColor = vec3(0.0f, 0.0f, 0.0f);
     }
     else if (geometryCategory == 5u) {
-        metadataColor = vec3(1.0, 1.0, 0.0);
+        metadataColor = vec3(1.0f, 0.0f, 1.0f);
     }
     else {
-        metadataColor = vec3(1.0);
+        metadataColor = vec3(0.0f);
     }
 
     color = vec4(metadataColor * brightness, 1.0);

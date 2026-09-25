@@ -59,7 +59,7 @@ namespace Replanetizer.Frames
             ImGui.SetNextWindowBgAlpha(0.85f);
 
             if (ImGui.Begin(frameName, WINDOW_FLAGS))
-                RenderMetadata(metadata);
+                RenderMetadata((uint) metadata);
             ImGui.End();
         }
 
@@ -67,10 +67,10 @@ namespace Replanetizer.Frames
         {
         }
 
-        private static void RenderMetadata(int metadata)
+        private static void RenderMetadata(uint metadata)
         {
             RenderedObjectType hitType = (RenderedObjectType) (metadata >> 24);
-            int hitId = metadata & 0xffffff;
+            uint hitId = metadata & 0xFFFFFF;
 
             ImGui.TextUnformatted(hitType.ToString());
 
@@ -78,32 +78,17 @@ namespace Replanetizer.Frames
             {
                 case RenderedObjectType.Collision:
                     {
-                        int geometryCategory = hitId >> 8;
-                        CollisionType type = new CollisionType((byte) (hitId & 0xFF));
+                        CollisionGeometryCategory category = CollisionVertexMetadata.GetCategory(hitId);
+                        CollisionType type = CollisionVertexMetadata.GetCollisionType(hitId);
 
-                        switch (geometryCategory)
+                        ImGui.TextUnformatted("Category: " + category.ToString());
+
+                        if (category == CollisionGeometryCategory.Standard || category == CollisionGeometryCategory.MobyTriangle)
                         {
-                            case 1:
-                                ImGui.TextUnformatted("Standard Collision");
-                                break;
-                            case 2:
-                                ImGui.TextUnformatted("Hero Collision");
-                                break;
-                            case 3:
-                                ImGui.TextUnformatted("Unknown Collision");
-                                break;
-                            case 4:
-                                ImGui.TextUnformatted("Moby Triangle Collision");
-                                break;
-                            case 5:
-                                ImGui.TextUnformatted("Moby Primitive Collision");
-                                break;
-                            default:
-                                break;
+                            ImGui.TextUnformatted("Type: " + type.GetMaterialName() + " [" + type.materialID + "]");
+                            ImGui.TextUnformatted("Sound: " + type.groupID);
                         }
 
-                        ImGui.TextUnformatted("Type: " + type.GetMaterialName() + " [" + type.materialID + "]");
-                        ImGui.TextUnformatted("Sound: " + type.groupID);
                         ImGui.TextUnformatted("Ignore Camera: " + type.ignoreCameraCollision.ToString());
                     }
                     break;

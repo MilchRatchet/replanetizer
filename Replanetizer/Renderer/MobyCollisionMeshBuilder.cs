@@ -163,7 +163,7 @@ namespace Replanetizer.Renderer
                         sinLatitude * MathF.Cos(longitude),
                         sinLatitude * MathF.Sin(longitude),
                         cosLatitude);
-                    AddVertex(vertices, center + direction * radius, CollisionVertexMetadata.Pack(0, category));
+                    AddVertex(vertices, center + direction * radius, CollisionVertexMetadata.Pack(new CollisionType(0), category));
                 }
             }
 
@@ -204,7 +204,7 @@ namespace Replanetizer.Renderer
                 {
                     float longitude = MathF.Tau * segment / SPHERE_SEGMENTS;
                     Vector3 direction = side * MathF.Cos(longitude) + up * MathF.Sin(longitude);
-                    AddVertex(vertices, ringCenter + direction * radial, CollisionVertexMetadata.Pack(0, category));
+                    AddVertex(vertices, ringCenter + direction * radial, CollisionVertexMetadata.Pack(new CollisionType(0), category));
                 }
             }
 

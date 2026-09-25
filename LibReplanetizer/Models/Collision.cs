@@ -191,7 +191,7 @@ namespace LibReplanetizer.Models
                         vertexList.Add(yPos);
                         vertexList.Add(zPos);
 
-                        vertexList.Add(CollisionVertexMetadata.Pack(collisionType[v].data, CollisionGeometryCategory.Standard));
+                        vertexList.Add(CollisionVertexMetadata.Pack(collisionType[v], CollisionGeometryCategory.Standard));
                         totalVertexCount++;
                     }
                 }
@@ -292,7 +292,7 @@ namespace LibReplanetizer.Models
                     indices[t * 3 + 0] = dataBlock[tOff + 0x00];
                     indices[t * 3 + 1] = dataBlock[tOff + 0x01];
                     indices[t * 3 + 2] = dataBlock[tOff + 0x02];
-                    //type = dataBlock[tOff + 0x02]; ???
+                    //type = dataBlock[tOff + 0x03]; // Unused by the game
                 }
             }
 
@@ -303,7 +303,7 @@ namespace LibReplanetizer.Models
                     vertexList.Add(vertices[v * 3 + 0] / 64.0f);
                     vertexList.Add(vertices[v * 3 + 1] / 64.0f);
                     vertexList.Add(vertices[v * 3 + 2] / 64.0f);
-                    vertexList.Add(CollisionVertexMetadata.Pack(0, category));
+                    vertexList.Add(CollisionVertexMetadata.Pack(new CollisionType(0x80), category));
                 }
 
                 for (int t = 0; t < triCount; t++)
