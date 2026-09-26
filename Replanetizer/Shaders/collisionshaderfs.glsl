@@ -100,10 +100,10 @@ void main() {
         metadataColor *= mix(1.0f, 0.55f, groupPattern);
     }
     else if (geometryCategory == 2u) {
-        metadataColor = vec3(0.5f, 0.5f, 1.0f);
+        metadataColor = (gl_FrontFacing) ? vec3(0.5f, 0.5f, 1.0f) : vec3(0.5f);
     }
     else if (geometryCategory == 3u) {
-        metadataColor = vec3(0.0f, 0.0f, 0.0f);
+        metadataColor = (gl_FrontFacing) ? vec3(1.0f, 0.25f, 0.75f) : vec3(0.5f);
     }
     else if (geometryCategory == 5u) {
         metadataColor = vec3(1.0f, 0.0f, 1.0f);
