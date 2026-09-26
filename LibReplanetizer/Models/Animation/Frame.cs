@@ -55,7 +55,7 @@ namespace LibReplanetizer.Models.Animations
             }
             public Vector3 scale;
             public byte bone;
-            // Negative values select the current sparse value instead of interpolating.
+            // A signed-negative marker selects the current sparse value instead of interpolating.
             public byte unk;
         }
 

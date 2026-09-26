@@ -738,7 +738,7 @@ namespace LibReplanetizer.LevelObjects
                 public byte state { get; set; }
                 public byte scaleOn { get; set; }
                 public byte absolute { get; set; }
-                public ushort boneID { get; set; }
+                public uint boneID { get; set; }
                 public uint pNext { get; set; }
                 public float animationBlend { get; set; }
                 public Vector4 rotation { get; set; }
@@ -753,23 +753,29 @@ namespace LibReplanetizer.LevelObjects
                     Quaternion[] rotations,
                     Vector3[] scalings,
                     bool[] hasScalings,
+                    bool[] scalingUsesCurrentValue,
                     Vector3[] translations,
-                    bool[] hasTranslations)
+                    bool[] hasTranslations,
+                    bool[] translationUsesCurrentValue)
                 {
                     this.speed = speed;
                     this.rotations = rotations;
                     this.scalings = scalings;
                     this.hasScalings = hasScalings;
+                    this.scalingUsesCurrentValue = scalingUsesCurrentValue;
                     this.translations = translations;
                     this.hasTranslations = hasTranslations;
+                    this.translationUsesCurrentValue = translationUsesCurrentValue;
                 }
 
                 public float speed { get; internal set; }
                 public readonly Quaternion[] rotations;
                 public readonly Vector3[] scalings;
                 public readonly bool[] hasScalings;
+                public readonly bool[] scalingUsesCurrentValue;
                 public readonly Vector3[] translations;
                 public readonly bool[] hasTranslations;
+                public readonly bool[] translationUsesCurrentValue;
 
                 internal void CopyFrom(RuntimeAnimationData source)
                 {
@@ -777,8 +783,10 @@ namespace LibReplanetizer.LevelObjects
                     Array.Copy(source.rotations, rotations, rotations.Length);
                     Array.Copy(source.scalings, scalings, scalings.Length);
                     Array.Copy(source.hasScalings, hasScalings, hasScalings.Length);
+                    Array.Copy(source.scalingUsesCurrentValue, scalingUsesCurrentValue, scalingUsesCurrentValue.Length);
                     Array.Copy(source.translations, translations, translations.Length);
                     Array.Copy(source.hasTranslations, hasTranslations, hasTranslations.Length);
+                    Array.Copy(source.translationUsesCurrentValue, translationUsesCurrentValue, translationUsesCurrentValue.Length);
                 }
             }
 
@@ -999,8 +1007,10 @@ namespace LibReplanetizer.LevelObjects
                         new Quaternion[source.rotations.Length],
                         new Vector3[source.scalings.Length],
                         new bool[source.hasScalings.Length],
+                        new bool[source.scalingUsesCurrentValue.Length],
                         new Vector3[source.translations.Length],
-                        new bool[source.hasTranslations.Length]);
+                        new bool[source.hasTranslations.Length],
+                        new bool[source.translationUsesCurrentValue.Length]);
                 }
 
                 destination.CopyFrom(source);
@@ -1121,7 +1131,9 @@ namespace LibReplanetizer.LevelObjects
                         new Quaternion[rotationCount],
                         new Vector3[rotationCount],
                         new bool[rotationCount],
+                        new bool[rotationCount],
                         new Vector3[rotationCount],
+                        new bool[rotationCount],
                         new bool[rotationCount]);
                 }
 
@@ -1140,12 +1152,17 @@ namespace LibReplanetizer.LevelObjects
                     result.scalings[i] = Vector3.One;
                 }
                 Array.Clear(result.hasScalings, 0, result.hasScalings.Length);
+                Array.Clear(result.scalingUsesCurrentValue, 0, result.scalingUsesCurrentValue.Length);
                 for (int i = 0; i < scalingCount; i++)
                 {
                     int offset = scalingDataOffset + i * 0x08;
                     int bone = runtimeAnimationDataBuffer[offset + 0x06];
                     if (bone >= result.scalings.Length) continue;
 
+                    if (!result.hasScalings[bone])
+                    {
+                        result.scalingUsesCurrentValue[bone] = (runtimeAnimationDataBuffer[offset + 0x07] & 0x80) != 0;
+                    }
                     result.scalings[bone] *= new Vector3(
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 4096.0f,
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 4096.0f,
@@ -1155,12 +1172,17 @@ namespace LibReplanetizer.LevelObjects
 
                 Array.Clear(result.translations, 0, result.translations.Length);
                 Array.Clear(result.hasTranslations, 0, result.hasTranslations.Length);
+                Array.Clear(result.translationUsesCurrentValue, 0, result.translationUsesCurrentValue.Length);
                 for (int i = 0; i < translationCount; i++)
                 {
                     int offset = translationDataOffset + i * 0x08;
                     int bone = runtimeAnimationDataBuffer[offset + 0x06];
                     if (bone >= result.translations.Length) continue;
 
+                    if (!result.hasTranslations[bone])
+                    {
+                        result.translationUsesCurrentValue[bone] = (runtimeAnimationDataBuffer[offset + 0x07] & 0x80) != 0;
+                    }
                     result.translations[bone] += new Vector3(
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x00) / 1024.0f,
                         ReadShort(runtimeAnimationDataBuffer, offset + 0x02) / 1024.0f,
@@ -1201,7 +1223,7 @@ namespace LibReplanetizer.LevelObjects
                         state = manipulatorBuffer[0x01],
                         scaleOn = manipulatorBuffer[0x02],
                         absolute = manipulatorBuffer[0x03],
-                        boneID = ReadUshort(manipulatorBuffer, 0x06),
+                        boneID = ReadUint(manipulatorBuffer, 0x04),
                         pNext = ReadUint(manipulatorBuffer, 0x08),
                         animationBlend = ReadFloat(manipulatorBuffer, 0x0C),
                         rotation = ReadVector4(manipulatorBuffer, 0x10),

@@ -448,6 +448,19 @@ namespace Replanetizer.Renderer
             return NormalizeQuaternion(current * (1.0f - blend) + target * blend);
         }
 
+        private static Quaternion BlendOverrideQuaternion(Quaternion current, Quaternion target, float blend)
+        {
+            if (current.X * target.X
+                + current.Y * target.Y
+                + current.Z * target.Z
+                + current.W * target.W < 0.0f)
+            {
+                current *= -1.0f;
+            }
+
+            return NormalizeQuaternion(current * (1.0f - blend) + target * blend);
+        }
+
         private static Quaternion ToGameQuaternion(Quaternion rendererQuaternion)
         {
             return new Quaternion(
@@ -590,8 +603,12 @@ namespace Replanetizer.Renderer
                 pose[bone] = new BoneTransform
                 {
                     rotation = BlendQuaternion(previous.rotation, current.rotation, blend),
-                    scale = (1.0f - blend) * previous.scale + blend * current.scale,
-                    translation = (1.0f - blend) * previous.translation + blend * current.translation
+                    scale = bone < currData.scalingUsesCurrentValue.Length && currData.scalingUsesCurrentValue[bone]
+                        ? current.scale
+                        : (1.0f - blend) * previous.scale + blend * current.scale,
+                    translation = bone < currData.translationUsesCurrentValue.Length && currData.translationUsesCurrentValue[bone]
+                        ? current.translation
+                        : (1.0f - blend) * previous.translation + blend * current.translation
                 };
             }
 
@@ -640,7 +657,7 @@ namespace Replanetizer.Renderer
                         animationData.rotation.Y,
                         animationData.rotation.Z,
                         animationData.rotation.W);
-                    Quaternion rotation = ToRendererQuaternion(BlendQuaternion(currentRotation, layerRotation, blend));
+                    Quaternion rotation = ToRendererQuaternion(BlendOverrideQuaternion(currentRotation, layerRotation, blend));
                     Vector3 scale = inverseBlend * current.scale + blend * new Vector3(
                         animationData.scale.X,
                         animationData.scale.Y,
@@ -702,7 +719,7 @@ namespace Replanetizer.Renderer
                 {
                     localBoneTransforms[bone] = new BoneTransform
                     {
-                        rotation = ToRendererQuaternion(BlendQuaternion(currentRotation, manipulatorRotation, blend)),
+                        rotation = ToRendererQuaternion(BlendOverrideQuaternion(currentRotation, manipulatorRotation, blend)),
                         scale = (1.0f - blend) * currentScale + blend * manipulatorScale,
                         translation = (1.0f - blend) * currentTranslation + blend * manipulatorTranslation
                     };
@@ -711,7 +728,7 @@ namespace Replanetizer.Renderer
                 {
                     localBoneTransforms[bone] = new BoneTransform
                     {
-                        rotation = ToRendererQuaternion(currentRotation * manipulatorRotation),
+                        rotation = ToRendererQuaternion(manipulatorRotation * currentRotation),
                         scale = currentScale * manipulatorScale,
                         translation = currentTranslation + manipulatorTranslation
                     };
@@ -804,7 +821,7 @@ namespace Replanetizer.Renderer
                 return;
             }
 
-            float blend = ClampBlend(memory.animationBlend);
+            float blend = memory.animationBlend;
 
             BuildRuntimeSourcePose(mobyModel, memory.previousAnimationData, memory.currentAnimationData, blend, runtimeCurrentPose!);
 
@@ -832,29 +849,64 @@ namespace Replanetizer.Renderer
             Animation? anim = (animationID >= 0 && animationID < animations.Count) ? animations[animationID] : null;
             Frame? frame = GetAnimationFrame(anim, currentFrameID);
 
-            if (anim != null && frame != null)
+            if (currentFrame == null && frame != null)
             {
-                float frameSpeed = (anim.speed != 0.0f) ? anim.speed : frame.speed;
-
-                if (frameSpeed == 0.0f || float.IsNaN(frameSpeed) || float.IsInfinity(frameSpeed))
+                previousFrame = frame;
+                if (anim != null && anim.frames.Count > 1)
                 {
-                    frameBlend = 1.0f;
+                    currentFrameID = 1;
+                    frame = GetAnimationFrame(anim, currentFrameID);
                 }
-                else
-                {
-                    frameBlend += deltaTime * frameSpeed * 60.0f;
-                }
+                currentFrame = frame;
             }
-
-            if (frame != currentFrame)
+            else if (frame != currentFrame)
             {
-                previousFrame = (currentFrame != null) ? currentFrame : frame;
+                previousFrame = currentFrame ?? frame;
                 currentFrame = frame;
             }
 
             if (previousFrame == null && frame != null)
             {
                 previousFrame = frame;
+            }
+
+            float frameSpeed = (anim != null && anim.speed != 0.0f)
+                ? anim.speed
+                : (previousFrame ?? frame)?.speed ?? 0.0f;
+
+            if (anim != null && frame != null)
+            {
+                if (frameSpeed != 0.0f && !float.IsNaN(frameSpeed) && !float.IsInfinity(frameSpeed))
+                {
+                    frameBlend += deltaTime * frameSpeed * 60.0f;
+                }
+            }
+
+            while (frameBlend >= 1.0f && anim != null && anim.frames.Count > 0)
+            {
+                float previousFrameSpeed = frameSpeed;
+                frameBlend -= 1.0f;
+                previousFrame = frame;
+                currentFrameID++;
+                if (currentFrameID >= anim.frames.Count)
+                {
+                    currentFrameID = 0;
+                }
+
+                frame = GetAnimationFrame(anim, currentFrameID);
+                currentFrame = frame;
+                frameSpeed = (anim.speed != 0.0f) ? anim.speed : (previousFrame ?? frame)?.speed ?? 0.0f;
+
+                if (anim.speed == 0.0f
+                    && previousFrameSpeed != 0.0f
+                    && !float.IsNaN(previousFrameSpeed)
+                    && !float.IsInfinity(previousFrameSpeed)
+                    && frameSpeed != 0.0f
+                    && !float.IsNaN(frameSpeed)
+                    && !float.IsInfinity(frameSpeed))
+                {
+                    frameBlend *= frameSpeed / previousFrameSpeed;
+                }
             }
 
             float blend = ClampBlend(frameBlend);
@@ -879,15 +931,6 @@ namespace Replanetizer.Renderer
                 }
             }
 
-            while (frameBlend >= 1.0f && anim != null)
-            {
-                frameBlend -= 1.0f;
-                currentFrameID++;
-                if (currentFrameID >= anim.frames.Count)
-                {
-                    currentFrameID = 0;
-                }
-            }
         }
 
         public override void Render(RendererPayload payload)
