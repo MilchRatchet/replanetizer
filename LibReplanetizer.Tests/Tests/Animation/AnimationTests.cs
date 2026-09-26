@@ -26,9 +26,9 @@ namespace LibReplanetizer.Tests.Animation
             WriteUshort(frameBytes, 0x0C, 8);
             WriteUshort(frameBytes, 0x0E, 1);
 
-            WriteShort(frameBytes, 0x10, 4096);
-            WriteShort(frameBytes, 0x12, 4096);
-            WriteShort(frameBytes, 0x14, 4096);
+            WriteShort(frameBytes, 0x10, 8192);
+            WriteShort(frameBytes, 0x12, 8192);
+            WriteShort(frameBytes, 0x14, 8192);
             frameBytes[0x16] = 0;
             frameBytes[0x17] = scaleMarker;
 
@@ -113,20 +113,48 @@ namespace LibReplanetizer.Tests.Animation
 
         [Theory]
         [InlineData(0x00, false)]
+        [InlineData(0x7F, false)]
         [InlineData(0x80, true)]
         [InlineData(0x81, true)]
         [InlineData(0xFF, true)]
-        public void AnyHighBitMarkerSelectsCurrentValueAcrossAnimationSources(byte marker, bool expected)
+        public void OnlySignedNegativeScaleMarkersApplyAndTranslationsIgnoreMarker(byte marker, bool scaleApplies)
         {
             Frame frame = BuildFrame(marker, marker);
             Moby.IngameMobyMemory memory = BuildRuntimeMemory(marker);
 
-            Assert.Equal(expected, frame.GetScalingUnk(0));
-            Assert.Equal(expected, frame.GetTranslationUnk(0));
-            Assert.Equal(expected, memory.previousAnimationData!.scalingUsesCurrentValue[0]);
-            Assert.Equal(expected, memory.previousAnimationData.translationUsesCurrentValue[0]);
-            Assert.Equal(expected, memory.currentAnimationData!.scalingUsesCurrentValue[0]);
-            Assert.Equal(expected, memory.currentAnimationData.translationUsesCurrentValue[0]);
+            Assert.Equal(scaleApplies ? new Vector3(2.0f) : Vector3.One, frame.GetScaling(0));
+            Assert.Equal(scaleApplies, memory.previousAnimationData!.hasScalings[0]);
+            Assert.Equal(scaleApplies, memory.currentAnimationData!.hasScalings[0]);
+            Assert.Equal(Vector3.One, frame.GetTranslation(0, Vector3.Zero));
+            Assert.True(memory.previousAnimationData.hasTranslations[0]);
+            Assert.True(memory.currentAnimationData.hasTranslations[0]);
+        }
+
+        [Fact]
+        public void ScaleComponentsAreDecodedUnsigned()
+        {
+            byte[] frameBytes = new byte[0x20];
+            WriteUshort(frameBytes, 0x06, 1);
+            WriteUshort(frameBytes, 0x0A, 1);
+            WriteUshort(frameBytes, 0x0C, 8);
+            WriteUshort(frameBytes, 0x10, 0x9000);
+            WriteUshort(frameBytes, 0x12, 0x9000);
+            WriteUshort(frameBytes, 0x14, 0x9000);
+            frameBytes[0x17] = 0x80;
+
+            string path = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllBytes(path, frameBytes);
+                using FileStream stream = File.OpenRead(path);
+                Frame frame = new Frame(stream, GameType.RaC1, 0, 1);
+                Assert.Equal(new Vector3(9.0f), frame.GetScaling(0));
+                Assert.Equal(0x9000, ReadUshort(frame.Serialize(), 0x10));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
         }
     }
 

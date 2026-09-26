@@ -176,7 +176,7 @@ namespace Replanetizer.Renderer
             {
                 Matrix4 localTransform = Matrix4.CreateTranslation(model.boneDatas[bone].translation);
                 int parent = model.boneDatas[bone].parent;
-                Matrix4 parentTransform = parent >= 0 && parent < bone ? boneTransforms[parent] : Matrix4.Identity;
+                Matrix4 parentTransform = !model.boneDatas[bone].isRoot && parent >= 0 && parent < bone ? boneTransforms[parent] : Matrix4.Identity;
                 boneTransforms[bone] = localTransform * parentTransform;
                 bonePositions[bone] = new Vector3(
                     boneTransforms[bone].M41,

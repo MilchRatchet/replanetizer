@@ -55,7 +55,7 @@ namespace LibReplanetizer.Models.Animations
             }
             public Vector3 scale;
             public byte bone;
-            // A signed-negative marker selects the current sparse value instead of interpolating.
+            // RC1 AnimationInterpolateFrames only applies scale records whose marker is signed-negative.
             public byte unk;
         }
 
@@ -79,6 +79,7 @@ namespace LibReplanetizer.Models.Animations
         private List<FrameBoneRotation> rotations { get; set; }
         private List<FrameBoneScaling> scalings { get; set; }
         private List<FrameBoneTranslation> translations { get; set; }
+        private readonly bool scalingsRequireMarker;
 
         public Quaternion GetRotationQuaternion(int bone)
         {
@@ -121,7 +122,7 @@ namespace LibReplanetizer.Models.Animations
 
         public Vector3 GetScaling(int bone)
         {
-            IEnumerable<FrameBoneScaling> boneScalings = scalings.Where(s => s.bone == bone);
+            IEnumerable<FrameBoneScaling> boneScalings = scalings.Where(s => s.bone == bone && (!scalingsRequireMarker || (s.unk & 0x80) != 0));
 
             if (boneScalings.Any() == false)
                 return Vector3.One;
@@ -129,12 +130,6 @@ namespace LibReplanetizer.Models.Animations
             // DL can have multiple scalings per bone
             // doesn't seem to break the other rac games
             return boneScalings.Select(x => x.scale).Aggregate((a, b) => a * b);
-        }
-
-        public bool GetScalingUnk(int bone)
-        {
-            // TODO: How to do this for DL?
-            return (scalings.FirstOrDefault(s => s.bone == bone).unk & 0x80) != 0;
         }
 
         public Vector3 GetTranslation(int bone, Vector3 fallbackTranslation)
@@ -150,15 +145,10 @@ namespace LibReplanetizer.Models.Animations
             return boneTranslations.Select(x => x.translation).Aggregate((a, b) => a + b);
         }
 
-        public bool GetTranslationUnk(int bone)
-        {
-            // TODO: How to do this for DL?
-            return (translations.FirstOrDefault(s => s.bone == bone).unk & 0x80) != 0;
-        }
-
         // Constructor for RaC 1, 2 and 3
         public Frame(FileStream fs, GameType game, int offset, int boneCount)
         {
+            scalingsRequireMarker = true;
             byte[] header = ReadBlock(fs, offset, 0x10);
             speed = ReadFloat(header, 0x00);
             frameIndex = ReadUshort(header, 0x04);
@@ -191,9 +181,10 @@ namespace LibReplanetizer.Models.Animations
                     // Custom MP levels may have a too large sec0Count
                     break;
                 }
-                float x = ReadShort(frameBlock, sec0Pointer + i * 8 + 0x00) / 4096.0f;
-                float y = ReadShort(frameBlock, sec0Pointer + i * 8 + 0x02) / 4096.0f;
-                float z = ReadShort(frameBlock, sec0Pointer + i * 8 + 0x04) / 4096.0f;
+                // The game zero-extends scale components (lhz), so they are never negative.
+                float x = ReadUshort(frameBlock, sec0Pointer + i * 8 + 0x00) / 4096.0f;
+                float y = ReadUshort(frameBlock, sec0Pointer + i * 8 + 0x02) / 4096.0f;
+                float z = ReadUshort(frameBlock, sec0Pointer + i * 8 + 0x04) / 4096.0f;
                 byte bone = frameBlock[sec0Pointer + i * 8 + 0x06];
                 byte unk = frameBlock[sec0Pointer + i * 8 + 0x07];
                 scalings.Add(new FrameBoneScaling(x, y, z, bone, unk));
@@ -271,9 +262,9 @@ namespace LibReplanetizer.Models.Animations
             byte[] sec0Bytes = new byte[scalings.Count * 0x08];
             for (int i = 0; i < scalings.Count; i++)
             {
-                WriteShort(sec0Bytes, i * 8 + 0x00, (short) (scalings[i].scale.X * 4096.0f));
-                WriteShort(sec0Bytes, i * 8 + 0x02, (short) (scalings[i].scale.Y * 4096.0f));
-                WriteShort(sec0Bytes, i * 8 + 0x04, (short) (scalings[i].scale.Z * 4096.0f));
+                WriteShort(sec0Bytes, i * 8 + 0x00, (short) (int) (scalings[i].scale.X * 4096.0f));
+                WriteShort(sec0Bytes, i * 8 + 0x02, (short) (int) (scalings[i].scale.Y * 4096.0f));
+                WriteShort(sec0Bytes, i * 8 + 0x04, (short) (int) (scalings[i].scale.Z * 4096.0f));
                 sec0Bytes[i * 8 + 0x06] = scalings[i].bone;
                 sec0Bytes[i * 8 + 0x07] = scalings[i].unk;
             }

@@ -522,16 +522,11 @@ namespace Replanetizer.Renderer
             Quaternion baseRotation = previousFrame.GetRotationQuaternion(bone);
             Quaternion nextRotation = frame.GetRotationQuaternion(bone);
             Quaternion rotation = BlendQuaternion(baseRotation, nextRotation, blend);
-            Vector3 baseScale = previousFrame.GetScaling(bone);
-            Vector3 nextScale = frame.GetScaling(bone);
-            Vector3 scaling = frame.GetScalingUnk(bone)
-                ? nextScale
-                : Vector3.Lerp(baseScale, nextScale, blend);
-            Vector3 baseTranslation = previousFrame.GetTranslation(bone, model.boneDatas[bone].translation);
-            Vector3 nextTranslation = frame.GetTranslation(bone, model.boneDatas[bone].translation);
-            Vector3 translationVector = frame.GetTranslationUnk(bone)
-                ? nextTranslation
-                : Vector3.Lerp(baseTranslation, nextTranslation, blend);
+            Vector3 scaling = Vector3.Lerp(previousFrame.GetScaling(bone), frame.GetScaling(bone), blend);
+            Vector3 translationVector = Vector3.Lerp(
+                previousFrame.GetTranslation(bone, model.boneDatas[bone].translation),
+                frame.GetTranslation(bone, model.boneDatas[bone].translation),
+                blend);
 
             return new BoneTransform
             {
@@ -603,12 +598,8 @@ namespace Replanetizer.Renderer
                 pose[bone] = new BoneTransform
                 {
                     rotation = BlendQuaternion(previous.rotation, current.rotation, blend),
-                    scale = bone < currData.scalingUsesCurrentValue.Length && currData.scalingUsesCurrentValue[bone]
-                        ? current.scale
-                        : (1.0f - blend) * previous.scale + blend * current.scale,
-                    translation = bone < currData.translationUsesCurrentValue.Length && currData.translationUsesCurrentValue[bone]
-                        ? current.translation
-                        : (1.0f - blend) * previous.translation + blend * current.translation
+                    scale = (1.0f - blend) * previous.scale + blend * current.scale,
+                    translation = (1.0f - blend) * previous.translation + blend * current.translation
                 };
             }
 
@@ -744,7 +735,7 @@ namespace Replanetizer.Renderer
             for (int i = 0; i < model.boneCount; i++)
             {
                 int parent = model.boneDatas[i].parent;
-                Matrix4 parentMatrix = (i == 0 || parent < 0 || parent >= i)
+                Matrix4 parentMatrix = (i == 0 || model.boneDatas[i].isRoot || parent < 0 || parent >= i)
                     ? Matrix4.Identity
                     : boneMatrices[parent];
 
