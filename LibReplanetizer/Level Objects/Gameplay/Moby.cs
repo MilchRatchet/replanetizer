@@ -388,7 +388,7 @@ namespace LibReplanetizer.LevelObjects
             light = ReadInt(mobyBlock, offset + 0x70);
             cutscene = ReadInt(mobyBlock, offset + 0x74);
 
-            color = Color.FromRgb((byte) r, (byte) g, (byte) b).ToPixel<Rgb24>();
+            color = Color.FromRgb((byte)r, (byte)g, (byte)b).ToPixel<Rgb24>();
             position = new Vector3(x, y, z);
             rotation = new Quaternion(rotx, roty, rotz);
             scale = new Vector3(scaleHolder, scaleHolder, scaleHolder);
@@ -449,7 +449,7 @@ namespace LibReplanetizer.LevelObjects
             light = ReadInt(mobyBlock, offset + 0x80);
             cutscene = ReadInt(mobyBlock, offset + 0x84);
 
-            color = Color.FromRgb((byte) r, (byte) g, (byte) b).ToPixel<Rgb24>();
+            color = Color.FromRgb((byte)r, (byte)g, (byte)b).ToPixel<Rgb24>();
             position = new Vector3(x, y, z);
             rotation = new Quaternion(rotx, roty, rotz);
             scale = new Vector3(scaleHolder); //Mobys only use the X axis of scale
@@ -504,7 +504,7 @@ namespace LibReplanetizer.LevelObjects
 
             cutscene = 0;
 
-            color = Color.FromRgb((byte) r, (byte) g, (byte) b).ToPixel<Rgb24>();
+            color = Color.FromRgb((byte)r, (byte)g, (byte)b).ToPixel<Rgb24>();
             position = new Vector3(x, y, z);
             rotation = new Quaternion(rotx, roty, rotz);
             scale = new Vector3(scaleHolder); //Mobys only use the X axis of scale
@@ -1054,7 +1054,7 @@ namespace LibReplanetizer.LevelObjects
 
                     for (int i = 0; i < layer.boneCount; i++)
                     {
-                        uint animationDataAddress = layer.pAnimation + (uint) (i * ANIMATION_DATA_SIZE);
+                        uint animationDataAddress = layer.pAnimation + (uint)(i * ANIMATION_DATA_SIZE);
                         if (!readMemory(animationDataAddress, animationDataBuffer)) break;
 
                         layer.animationData.Add(new AnimationData
@@ -1329,7 +1329,7 @@ namespace LibReplanetizer.LevelObjects
                 collPos = new Vector4(collX, collY, collZ, collW);
                 position = new Vector4(X, Y, Z, W);
                 rotation = new Vector4(rotX, rotY, rotZ, rotW);
-                color = Color.FromRgb((byte) red, (byte) green, (byte) blue).ToPixel<Rgb24>();
+                color = Color.FromRgb((byte)red, (byte)green, (byte)blue).ToPixel<Rgb24>();
 
                 if (updateID == byte.MaxValue)
                     Utilities.DebugAssert(pPreviousAnimationData == 0x00A2C5C0u + previousAnimationFrame * 0x800, "Pointer should have originated from cache!");
@@ -1393,7 +1393,7 @@ namespace LibReplanetizer.LevelObjects
                 collPos = new Vector4(collX, collY, -collZ, collW);
                 position = new Vector4(X, Y, Z, W);
                 rotation = new Vector4(rotX, rotY, rotZ, rotW);
-                color = Color.FromRgb((byte) red, (byte) green, (byte) blue).ToPixel<Rgb24>();
+                color = Color.FromRgb((byte)red, (byte)green, (byte)blue).ToPixel<Rgb24>();
             }
         }
 
@@ -1498,14 +1498,7 @@ namespace LibReplanetizer.LevelObjects
             if (model != null)
                 scale /= modelSize;
 
-            Vector3 collisionEuler = new Vector3(memory.rotation.X, memory.rotation.Y, memory.rotation.Z);
-            Matrix4 collisionRotZ = Matrix4.CreateFromAxisAngle(Vector3.UnitZ, collisionEuler.Z);
-            Matrix4 collisionRotY = Matrix4.CreateFromAxisAngle(Vector3.UnitY, collisionEuler.Y);
-            Matrix4 collisionRotX = Matrix4.CreateFromAxisAngle(Vector3.UnitX, collisionEuler.X);
-            Matrix4 collisionScaleMatrix = Matrix4.CreateScale(memory.scale);
-            Matrix4 collisionTranslationMatrix = Matrix4.CreateTranslation(new Vector3(memory.position));
-
-            collisionMatrix = collisionScaleMatrix * collisionRotX * collisionRotY * collisionRotZ * collisionTranslationMatrix;
+            collisionMatrix = modelMatrix;
             collisionTriangleMatrix = modelMatrix;
             collisionPosition = new Vector3(memory.position);
         }

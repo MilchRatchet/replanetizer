@@ -37,25 +37,68 @@ namespace Replanetizer.Renderer
 
         public static MobyCollisionMesh Build(MobyModelCollision collision)
         {
-            return Build(collision, null);
+            return Build(collision, null, Vector3.UnitZ);
         }
 
         public static MobyCollisionMesh Build(MobyModel model)
         {
-            return Build(model, GetBindPoseBonePositions(model));
+            return Build(model, GetBindPoseBonePositions(model), Matrix4.Identity);
         }
 
         public static MobyCollisionMesh Build(MobyModel model, IReadOnlyList<Vector3> indexedVertices)
         {
-            if (model.collisionData == null)
-            {
-                return Build(new MobyModelCollision(), indexedVertices);
-            }
-
-            return Build(model.collisionData, indexedVertices);
+            return Build(model, indexedVertices, Matrix4.Identity);
         }
 
-        private static MobyCollisionMesh Build(MobyModelCollision collision, IReadOnlyList<Vector3>? indexedVertices)
+        public static MobyCollisionMesh Build(MobyModel model, Matrix4 modelToWorld)
+        {
+            return Build(model, GetBindPoseBonePositions(model), modelToWorld);
+        }
+
+        public static MobyCollisionMesh Build(MobyModel model, IReadOnlyList<Vector3> indexedVertices, Matrix4 modelToWorld)
+        {
+            Vector3 capsuleAxis = GetLocalCapsuleAxis(modelToWorld);
+            MobyModelCollision collision = model.collisionData ?? new MobyModelCollision();
+            return Build(collision, indexedVertices, capsuleAxis);
+        }
+
+        public static Vector3 GetLocalCapsuleAxis(Matrix4 modelToWorld)
+        {
+            modelToWorld.M14 = 0.0f;
+            modelToWorld.M24 = 0.0f;
+            modelToWorld.M34 = 0.0f;
+            modelToWorld.M41 = 0.0f;
+            modelToWorld.M42 = 0.0f;
+            modelToWorld.M43 = 0.0f;
+            modelToWorld.M44 = 1.0f;
+
+            float determinant = modelToWorld.Determinant;
+            if (determinant == 0.0f || float.IsNaN(determinant) || float.IsInfinity(determinant))
+            {
+                return Vector3.UnitZ;
+            }
+
+            Matrix4 inverse;
+            try
+            {
+                inverse = modelToWorld.Inverted();
+            }
+            catch (InvalidOperationException)
+            {
+                return Vector3.UnitZ;
+            }
+
+            Vector3 axis = Vector3.TransformNormal(Vector3.UnitZ, inverse);
+            float lengthSquared = axis.LengthSquared;
+            if (lengthSquared <= 0.0f || float.IsNaN(lengthSquared) || float.IsInfinity(lengthSquared))
+            {
+                return Vector3.UnitZ;
+            }
+
+            return axis / MathF.Sqrt(lengthSquared);
+        }
+
+        private static MobyCollisionMesh Build(MobyModelCollision collision, IReadOnlyList<Vector3>? indexedVertices, Vector3 capsuleAxis)
         {
             List<float> triangleVertices = new List<float>();
             List<uint> triangleIndices = new List<uint>();
@@ -69,7 +112,7 @@ namespace Replanetizer.Renderer
 
             foreach (MobyModelCollisionPrimitive primitive in collision.primitives)
             {
-                AddPrimitive(primitiveVertices, primitiveIndices, collision, indexedVertices, primitive);
+                AddPrimitive(primitiveVertices, primitiveIndices, collision, indexedVertices, capsuleAxis, primitive);
             }
 
             return new MobyCollisionMesh(
@@ -78,7 +121,7 @@ namespace Replanetizer.Renderer
         }
 
         private static void AddPrimitive(List<float> vertices, List<uint> indices, MobyModelCollision collision,
-            IReadOnlyList<Vector3>? indexedVertices, MobyModelCollisionPrimitive primitive)
+            IReadOnlyList<Vector3>? indexedVertices, Vector3 capsuleAxis, MobyModelCollisionPrimitive primitive)
         {
             switch (primitive.shape)
             {
@@ -97,21 +140,20 @@ namespace Replanetizer.Renderer
                 case MobyModelCollisionShape.Capsule:
                     float capsuleLength = primitive.capsuleLength;
                     AddCapsule(vertices, indices,
-                        new Vector3(primitive.capsuleCenterX, primitive.capsuleCenterY,
-                            primitive.capsuleCenterZ + capsuleLength * 0.5f),
-                        Vector3.UnitZ, capsuleLength * 0.5f, primitive.capsuleRadius, CollisionGeometryCategory.MobyPrimitive);
+                        new Vector3(primitive.capsuleCenterX, primitive.capsuleCenterY, primitive.capsuleCenterZ)
+                            + capsuleAxis * (capsuleLength * 0.5f),
+                        capsuleAxis, capsuleLength * 0.5f, primitive.capsuleRadius, CollisionGeometryCategory.MobyPrimitive);
                     break;
                 case MobyModelCollisionShape.IndexedCapsule:
                     if (TryGetIndexedVertex(indexedVertices, primitive.indexedCapsuleVertex0, out Vector3 capsuleStart)
                         && TryGetIndexedVertex(indexedVertices, primitive.indexedCapsuleVertex1, out Vector3 capsuleEnd))
                     {
-                        Vector3 axis = capsuleEnd - capsuleStart;
-                        float length = axis.Length;
+                        Vector3 capsuleDirection = capsuleEnd - capsuleStart;
+                        float length = capsuleDirection.Length;
                         if (length > float.Epsilon)
                         {
-                            Vector3 capsuleOrigin = capsuleStart.Z < capsuleEnd.Z ? capsuleStart : capsuleEnd;
-                            AddCapsule(vertices, indices, capsuleOrigin + Vector3.UnitZ * (length * 0.5f),
-                                Vector3.UnitZ, length * 0.5f, primitive.indexedCapsuleRadius, CollisionGeometryCategory.MobyPrimitive);
+                            AddCapsule(vertices, indices, (capsuleStart + capsuleEnd) * 0.5f,
+                                capsuleDirection, length * 0.5f, primitive.indexedCapsuleRadius, CollisionGeometryCategory.MobyPrimitive);
                         }
                         else
                         {
@@ -149,7 +191,7 @@ namespace Replanetizer.Renderer
         {
             if (radius <= 0.0f || float.IsNaN(radius) || float.IsInfinity(radius)) return;
 
-            uint firstVertex = (uint) (vertices.Count / VERTEX_STRIDE);
+            uint firstVertex = (uint)(vertices.Count / VERTEX_STRIDE);
             for (int stack = 0; stack <= CAPSULE_STACKS; stack++)
             {
                 float latitude = MathF.PI * stack / CAPSULE_STACKS;
@@ -180,7 +222,7 @@ namespace Replanetizer.Renderer
             Vector3 basis = MathF.Abs(Vector3.Dot(axis, Vector3.UnitZ)) < 0.9f ? Vector3.UnitZ : Vector3.UnitX;
             Vector3 side = Vector3.Cross(axis, basis).Normalized();
             Vector3 up = Vector3.Cross(axis, side).Normalized();
-            uint firstVertex = (uint) (vertices.Count / VERTEX_STRIDE);
+            uint firstVertex = (uint)(vertices.Count / VERTEX_STRIDE);
             List<(float axial, float radial)> rings = new List<(float axial, float radial)>();
             for (int stack = 0; stack <= CAPSULE_STACKS; stack++)
             {
@@ -217,10 +259,10 @@ namespace Replanetizer.Renderer
             {
                 for (int segment = 0; segment < segments; segment++)
                 {
-                    uint current = firstVertex + (uint) (stack * segments + segment);
-                    uint next = firstVertex + (uint) (stack * segments + (segment + 1) % segments);
-                    uint above = current + (uint) segments;
-                    uint aboveNext = next + (uint) segments;
+                    uint current = firstVertex + (uint)(stack * segments + segment);
+                    uint next = firstVertex + (uint)(stack * segments + (segment + 1) % segments);
+                    uint above = current + (uint)segments;
+                    uint aboveNext = next + (uint)segments;
                     indices.Add(current);
                     indices.Add(above);
                     indices.Add(next);
@@ -264,7 +306,7 @@ namespace Replanetizer.Renderer
                 || !TryGetVertex(collision, triangle.vertex2, out Vector3 vertex2))
                 return;
 
-            uint firstVertex = (uint) (vertices.Count / VERTEX_STRIDE);
+            uint firstVertex = (uint)(vertices.Count / VERTEX_STRIDE);
             float metadata = CollisionVertexMetadata.Pack(triangle.collisionType, CollisionGeometryCategory.MobyTriangle);
             AddVertex(vertices, vertex0, metadata);
             AddVertex(vertices, vertex1, metadata);
