@@ -132,7 +132,7 @@ namespace Replanetizer.Frames
 
             rendererPayload = new RendererPayload(camera, selectedObjects, toolbox, showBangles);
 
-            subFrames.Add(new HoverMetadataFrame(this.wnd, this));
+            AddSubFrame(() => new HoverMetadataFrame(this.wnd, this));
 
             LoadLevel(level);
         }
